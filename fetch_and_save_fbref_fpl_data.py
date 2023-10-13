@@ -1,9 +1,23 @@
+from datetime import datetime, timedelta
+from airflow import DAG
+from airflow.operators.python_operator import PythonOperator
 import requests
 from bs4 import BeautifulSoup
 import pandas as pd
 from datetime import date
 import os
 import boto3
+import random
+import time
+
+default_args = {
+    'owner': 'airflow',
+    'depends_on_past': False,
+    'email_on_failure': False,
+    'email_on_retry': False,
+    'retries': 1,
+    'retry_delay': timedelta(minutes=5),
+}
 
 s3 = boto3.client("s3")
 
@@ -17,10 +31,25 @@ def upload_to_s3(file_name, object_name):
 
 
 def get_tables(url):
-    res = requests.get(url)
-    soup = BeautifulSoup(res.text, "lxml")
-    all_tables = soup.findAll("tbody")
-    return all_tables
+    headers = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.107 Safari/537.3',
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9',
+    'Accept-Encoding': 'gzip, deflate, br',
+    'Accept-Language': 'en-US,en;q=0.9',
+    'Connection': 'keep-alive',
+    'Pragma': 'no-cache',
+    'Cache-Control': 'no-cache',
+    'Upgrade-Insecure-Requests': '1'
+    }
+    time_to_sleep = random.uniform(3.0, 6.0)  # Random time between 3 and 6 seconds
+    time.sleep(time_to_sleep)
+    res = requests.get(url, headers=headers)
+    if res.status_code == 200:
+        soup = BeautifulSoup(res.text, "lxml")
+        all_tables = soup.findAll("tbody")
+        return all_tables
+    else:
+        print(f"Failed to retrieve the webpage. Status code: {res.status_code}")
 
 
 def get_team_links():
@@ -50,7 +79,6 @@ def rows_to_datafame(rows):
 def save_fbref_files():
     indices_to_track = [0, 3, 4, 5, 8]
     team_data = get_team_links()
-    save_path = os.path.expanduser("~/Downloads/testdata/")
     for k, v in team_data.items():
         team_raw = get_tables(v)
         dataframes = {
@@ -64,7 +92,7 @@ def save_fbref_files():
             file_name = (
                 f"{k.replace(' ','_')}_{date.today().strftime('%Y%m%d')}_{key}.csv"
             )
-            local_file_path = os.path.expanduser(f"~/fpldata_local/{file_name}")
+            local_file_path = os.path.expanduser(f"~/fpl_analytics/fpldata_local/{file_name}")
             dataframes[idx].to_csv(local_file_path)
             upload_to_s3(local_file_path, file_name)
     print("Saving fbref files is done.")
@@ -80,7 +108,7 @@ def save_and_update_fpl_data():
     positions = pd.json_normalize(r["element_types"])
     players = players.merge(positions, left_on="element_type", right_on="id")
     player_file_name = f"players_data_{date.today().strftime('%Y%m%d')}.csv"
-    local_file_path = os.path.expanduser(f"~/fpldata_local/{player_file_name}")
+    local_file_path = os.path.expanduser(f"~/fpl_analytics/fpldata_local/{player_file_name}")
     players.to_csv(local_file_path, index=False)
     upload_to_s3(local_file_path, player_file_name)
 
@@ -88,7 +116,7 @@ def save_and_update_fpl_data():
     teams = pd.json_normalize(r["teams"])
     # Update and save teams_ready dataframe
     teams_ready = pd.read_csv(
-        os.path.expanduser("~/Downloads/epl-2023-GMTStandardTime.csv")
+    os.path.expanduser("~/fpl_analytics/fpldata_local/epl-2023-GMTStandardTime.csv")
     )
     strength = teams[["id", "name", "strength"]]
     strength = strength.replace("Nott'm Forest", "Nottingham Forest")
@@ -106,13 +134,29 @@ def save_and_update_fpl_data():
         }
     )
     team_file_name = f"teams_ready_updated_{date.today().strftime('%Y%m%d')}.csv"
-    local_file_path = os.path.expanduser(f"~/fpldata_local/{team_file_name}")
+    local_file_path = os.path.expanduser(f"~/fpl_analytics/fpldata_local/{team_file_name}")
     teams_ready.to_csv(local_file_path, index=False)
     upload_to_s3(local_file_path, team_file_name)
 
     print("FPL data has been uploaded")
 
+with DAG(
+    'fetch_and_save_raw_fpl_data',
+    default_args=default_args,
+    description='A DAG to fetch and save FBRef and FPL data',
+    schedule_interval=None,
+    start_date=datetime(2023, 10, 14),
+    catchup=False,
+) as dag:
 
-if __name__ == "__main__":
-    save_fbref_files()
-    save_and_update_fpl_data()
+    save_fbref_task = PythonOperator(
+        task_id='save_fbref_files',
+        python_callable=save_fbref_files,
+    )
+
+    save_fpl_task = PythonOperator(
+        task_id='save_and_update_fpl_data',
+        python_callable=save_and_update_fpl_data,
+    )
+
+    save_fbref_task >> save_fpl_task
