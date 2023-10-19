@@ -42,7 +42,8 @@ def preprocess_fpl_df(fpl_df, team_df):
     fpl_df['web_name'] = fpl_df['web_name'].str.replace(".", " ")
     fpl_df['merge_name'] = fpl_df['web_name'].str.split().str[-1].apply(unidecode)
     fpl_df['player_name'] = fpl_df['merge_name'].apply(unidecode)
-    return fpl_df[["singular_name", "chance_of_playing_this_round", "total_points", "points_per_game", "team_name", "merge_name", "web_name", "first_name","player_name"]]
+    fpl_df['now_cost'] = fpl_df['now_cost'] / 10
+    return fpl_df[["singular_name", "chance_of_playing_this_round", "total_points", "points_per_game","now_cost","clean_sheets","goals_conceded","expected_goals_conceded","expected_goals_conceded_per_90","ict_index", "team_name", "merge_name", "web_name", "first_name","player_name"]]
 
 def preprocess_fbref_df(fbref_df):
     fbref_df['player_name'] = fbref_df['player'].str.split().str[-1].apply(unidecode)
@@ -83,8 +84,20 @@ def process_data_type(data_type):
     team_list = get_team_list()
     df = pd.concat([process_data(team, data_type) for team in team_list])
     df.fillna(0, inplace=True)
+    df.drop(['nationality','age','matches','chance_of_playing_this_round'], axis=1, inplace=True)
     local_file_path = os.path.expanduser(f"{BASE_PATH}processed/{data_type}_{ds_nodash}.csv")
+    df.drop_duplicates(inplace=True)
     df.to_csv(local_file_path, index=False)
+    to_exclude = ((df['player'] == 'Gabriel Martinelli') & (df['singular_name'] != 'Midfielder')) \
+                | ((df['player'] == 'Toti Gomes') & (df['singular_name'] != 'Defender')) \
+                | ((df['player'] == 'Santiago Bueno') & (df['singular_name'] != 'Defender')) \
+                | ((df['player'] == 'Toti Gomes') & (df['singular_name'] != 'Defender')) \
+                | ((df['player'] == 'Hugo Bueno') & (df['total_points'] == 0)) \
+                | ((df['player'] == 'Adam Davies') & (df['singular_name'] != 'Goalkeeper')) \
+                | ((df['player'] == 'Gabriel Jesus') & (df['singular_name'] != 'Forward')) \
+                | ((df['player'] == 'Jacob Murphy') & (df['singular_name'] != 'Midfielder')) \
+                | ((df['player'] == 'Tom Davies') & (df['singular_name'] != 'Midfielder'))
+    df = df[~to_exclude]
     upload_to_google_sheet(df, data_type)
 
 
