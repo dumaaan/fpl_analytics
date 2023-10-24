@@ -77,7 +77,7 @@ def rows_to_datafame(rows):
 
 
 def save_fbref_files():
-    indices_to_track = [0, 3, 4, 5, 8]
+    indices_to_track = [0, 2, 3, 4, 5, 8]
     team_data = get_team_links()
     for k, v in team_data.items():
         team_raw = get_tables(v)
@@ -87,14 +87,31 @@ def save_fbref_files():
         print(f"Saving file for team {k}")
         for idx, key in zip(
             indices_to_track,
-            ["generic", "goalkeeper", "shooting", "passing", "defensive"],
+            ["generic", "goalkeeper-basic", "goalkeeper", "shooting", "passing", "defensive"],
         ):
-            file_name = (
-                f"{k.replace(' ','_')}_{date.today().strftime('%Y%m%d')}_{key}.csv"
+            if k == "Nott'ham Forest":
+                file_name = (
+                f'Nottingham_Forest_{date.today().strftime("%Y%m%d")}_{key}.csv'
             )
+            else:
+                file_name = (
+                    f'{k.replace(" ","_")}_{date.today().strftime("%Y%m%d")}_{key}.csv'
+                )
             local_file_path = os.path.expanduser(f"~/fpl_analytics/fpldata_local/{file_name}")
-            dataframes[idx].to_csv(local_file_path)
-            upload_to_s3(local_file_path, file_name)
+            if idx not in (2,3):
+                dataframes[idx]['team_name'] = str(k.replace(' ','_'))
+                dataframes[idx].to_csv(local_file_path, index=False)
+            elif idx == 2:
+                to_concat = dataframes[idx]
+                to_concat.drop(['nationality','age','position','matches'], axis=1, inplace=True)
+                print(to_concat)
+            elif idx == 3:
+                dataframes[idx] = dataframes[idx].merge(to_concat, on='player')
+                dataframes[idx]['team_name'] = str(k.replace(' ','_'))
+                print('saving goalkeeping data')
+                dataframes[idx].to_csv(local_file_path, index=False)
+                print(dataframes[idx])
+            #upload_to_s3(local_file_path, file_name)
     print("Saving fbref files is done.")
 
 
@@ -110,7 +127,7 @@ def save_and_update_fpl_data():
     player_file_name = f"players_data_{date.today().strftime('%Y%m%d')}.csv"
     local_file_path = os.path.expanduser(f"~/fpl_analytics/fpldata_local/{player_file_name}")
     players.to_csv(local_file_path, index=False)
-    upload_to_s3(local_file_path, player_file_name)
+    #upload_to_s3(local_file_path, player_file_name)
 
     # Process and save teams data
     teams = pd.json_normalize(r["teams"])
@@ -119,7 +136,17 @@ def save_and_update_fpl_data():
     os.path.expanduser("~/fpl_analytics/fpldata_local/epl-2023-GMTStandardTime.csv")
     )
     strength = teams[["id", "name", "strength"]]
-    strength = strength.replace("Nott'm Forest", "Nottingham Forest")
+    team_name_replace_dict = {
+    'Luton': 'Luton Town',
+    'Man City': 'Manchester City',
+    'Man Utd': 'Manchester Utd',
+    'Newcastle': 'Newcastle Utd',
+    "Nott'm Forest": "Nottingham Forest",
+    'Spurs': 'Tottenham'
+   }
+    strength = strength.replace(team_name_replace_dict)
+    teams_ready['Home Team'] = teams_ready['Home Team'].replace(team_name_replace_dict)
+    teams_ready['Away Team'] = teams_ready['Away Team'].replace(team_name_replace_dict)
     teams_ready = teams_ready.merge(
         strength, how="left", left_on="Home Team", right_on="name"
     ).merge(strength, how="left", left_on="Away Team", right_on="name")
@@ -136,7 +163,7 @@ def save_and_update_fpl_data():
     team_file_name = f"teams_ready_updated_{date.today().strftime('%Y%m%d')}.csv"
     local_file_path = os.path.expanduser(f"~/fpl_analytics/fpldata_local/{team_file_name}")
     teams_ready.to_csv(local_file_path, index=False)
-    upload_to_s3(local_file_path, team_file_name)
+   #upload_to_s3(local_file_path, team_file_name)
 
     print("FPL data has been uploaded")
 
@@ -159,4 +186,4 @@ with DAG(
         python_callable=save_and_update_fpl_data,
     )
 
-    save_fbref_task >> save_fpl_task
+    [save_fbref_task, save_fpl_task]
