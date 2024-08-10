@@ -45,7 +45,7 @@ def download_file(repo: Any, file_path: str) -> Optional[pd.DataFrame]:
 
 
 def create_table(
-    conn: duckdb.DuckDBConnection, table_name: str, df: pd.DataFrame
+    conn: duckdb.DuckDBPyConnection, table_name: str, df: pd.DataFrame
 ) -> None:
     """
     Create a table in DuckDB from a pandas DataFrame.
@@ -68,7 +68,7 @@ def create_table(
         print(f"Error creating table {safe_table_name}: {str(e)}")
 
 
-def table_exists(conn: duckdb.DuckDBConnection, table_name: str) -> bool:
+def table_exists(conn: duckdb.DuckDBPyConnection, table_name: str) -> bool:
     """
     Check if a table exists in the DuckDB database.
 
@@ -131,7 +131,7 @@ def establish_github_connection(repo_owner: str, repo_name: str) -> Any:
 
 
 def process_season_data(
-    repo: Any, conn: duckdb.DuckDBConnection, season: str, data_types: List[str]
+    repo: Any, conn: duckdb.DuckDBPyConnection, season: str, data_types: List[str]
 ) -> None:
     """
     Process data for a specific season.
@@ -147,11 +147,10 @@ def process_season_data(
 
 
 def fetch_and_upload_table(
-    repo: Any, conn: duckdb.DuckDBConnection, season: str, data_type: str
+    repo: Any, conn: duckdb.DuckDBPyConnection, season: str, data_type: str
 ) -> None:
     """
     Fetch data from GitHub and upload it to DuckDB.
-
     Args:
         repo: GitHub repository object
         conn: DuckDB connection object
@@ -168,7 +167,7 @@ def fetch_and_upload_table(
         print(f"Unknown data type: {data_type}")
 
 
-def process_gw_data(repo: Any, conn: duckdb.DuckDBConnection, season: str) -> None:
+def process_gw_data(repo: Any, conn: duckdb.DuckDBPyConnection, season: str) -> None:
     """Process gameweek data for a season."""
     gw_folder = f"data/{season}/gws"
     gw_contents = github_api_call(repo.get_contents, gw_folder)
@@ -183,7 +182,7 @@ def process_gw_data(repo: Any, conn: duckdb.DuckDBConnection, season: str) -> No
                 print(f"Skipping {content.name}, table already exists.")
 
 
-def process_player_data(repo: Any, conn: duckdb.DuckDBConnection, season: str) -> None:
+def process_player_data(repo: Any, conn: duckdb.DuckDBPyConnection, season: str) -> None:
     """Process player data for a season."""
     players_folder = f"data/{season}/players"
     players_contents = github_api_call(repo.get_contents, players_folder)
@@ -202,7 +201,7 @@ def process_player_data(repo: Any, conn: duckdb.DuckDBConnection, season: str) -
 
 
 def process_understat_data(
-    repo: Any, conn: duckdb.DuckDBConnection, season: str
+    repo: Any, conn: duckdb.DuckDBPyConnection, season: str
 ) -> None:
     """Process understat data for a season."""
     understat_folder = f"data/{season}/understat"
