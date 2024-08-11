@@ -1,0 +1,11 @@
+version: 2
+
+sources:
+  - name: fpl_api
+    database: fpl_api_data
+    schema: main
+    tables:
+      - name: players
+      - name: player_history
+      - name: fixtures
+      - name: teams
