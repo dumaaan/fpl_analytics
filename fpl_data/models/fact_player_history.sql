@@ -2,7 +2,6 @@
 
 SELECT
   id as player_id,
-  -- We don't have fixture and opponent_team in this data, so we'll omit those
   total_points,
   minutes,
   goals_scored,
@@ -21,7 +20,6 @@ SELECT
   creativity,
   threat,
   ict_index,
-  -- Additional relevant columns
   element_type,
   team,
   now_cost,
