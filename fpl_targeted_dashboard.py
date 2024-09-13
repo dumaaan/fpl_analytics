@@ -1,75 +1,106 @@
 import streamlit as st
 import pandas as pd
 import altair as alt
-import duckdb
-import numpy as np
+import requests
 from typing import List, Dict, Any
 
 # Configuration
 CONFIG: Dict[str, Any] = {
-    'db_name': 'fpl_api_data.db',
     'min_minutes': 90,
     'top_n_players': 20,
     'chart_width': 800,
     'chart_height': 500
 }
 
-# Connect to DuckDB
-@st.cache_resource
-def get_connection():
-    return duckdb.connect(CONFIG['db_name'])
+TEAM_MAPPING = {
+    1: 'Arsenal',
+    2: 'Aston Villa',
+    3: 'Bournemouth',
+    4: 'Brentford',
+    5: 'Brighton',
+    6: 'Chelsea',
+    7: 'Crystal Palace',
+    8: 'Everton',
+    9: 'Fulham',
+    10: 'Ipswich',
+    11: 'Leicester',
+    12: 'Liverpool',
+    13: 'Man City',
+    14: 'Man Utd',
+    15: 'Newcastle',
+    16: 'Nottingham Forest',
+    17: 'Southampton',
+    18: 'Tottenham',
+    19: 'West Ham',
+    20: 'Wolves'
+}
 
-# Load and preprocess data
+# Fetch data from FPL API
 @st.cache_data
 def load_data():
-    conn = get_connection()
-    df = pd.read_sql("SELECT * FROM fpl_player_stats", conn)
+    url = "https://fantasy.premierleague.com/api/bootstrap-static/"
+    response = requests.get(url)
+    data = response.json()
+    
+    df = pd.DataFrame(data['elements'])
+    df['team'] = df['team'].map(TEAM_MAPPING).fillna('Unknown')  # Replace team ID with name, fill any missing with 'Unknown'
+    
+    # Convert relevant columns to numeric
     numeric_columns = [
-        'price', 'total_points', 'minutes', 'goals_scored', 'assists', 
-        'expected_goals', 'expected_assists', 'selected_by_percent', 
-        'form', 'points_per_game', 'bonus', 'bps', 'influence', 
-        'creativity', 'threat', 'ict_index', 'yellow_cards', 'red_cards',
-        'starts', 'points_per_million', 'clean_sheets', 'goals_conceded', 'saves'
+        'cost_change_event', 'cost_change_event_fall', 'cost_change_start',
+        'cost_change_start_fall', 'dreamteam_count', 'event_points', 'form',
+        'in_dreamteam', 'now_cost', 'points_per_game', 'selected_by_percent',
+        'total_points', 'transfers_in', 'transfers_in_event', 'transfers_out',
+        'transfers_out_event', 'value_form', 'value_season', 'minutes',
+        'goals_scored', 'assists', 'clean_sheets', 'goals_conceded',
+        'own_goals', 'penalties_saved', 'penalties_missed', 'yellow_cards',
+        'red_cards', 'saves', 'bonus', 'bps', 'influence', 'creativity',
+        'threat', 'ict_index', 'starts', 'expected_goals', 'expected_assists',
+        'expected_goal_involvements', 'expected_goals_conceded'
     ]
+    
     for col in numeric_columns:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors='coerce')
     
     # Calculate additional metrics
-    df['goal_overperformance'] = df['goals_scored'] - df['expected_goals']
-    df['assist_overperformance'] = df['assists'] - df['expected_assists']
+    df['price'] = df['now_cost'] / 10
+    df['points_per_million'] = df['total_points'] / df['price']
     df['points_per_90'] = df['total_points'] / (df['minutes'] / 90)
-    df['cards'] = df['yellow_cards'] + 2 * df['red_cards']
     df['goals_per_90'] = df['goals_scored'] / (df['minutes'] / 90)
     df['assists_per_90'] = df['assists'] / (df['minutes'] / 90)
     df['goal_involvement_per_90'] = (df['goals_scored'] + df['assists']) / (df['minutes'] / 90)
     df['xGI_per_90'] = (df['expected_goals'] + df['expected_assists']) / (df['minutes'] / 90)
     df['clean_sheet_percentage'] = df['clean_sheets'] / (df['minutes'] / 90)
     df['goals_conceded_per_90'] = df['goals_conceded'] / (df['minutes'] / 90)
-    df['saves_per_90'] = df['saves'] / (df['minutes'] / 90)
-    df['bonus_points_per_90'] = df['bonus'] / (df['minutes'] / 90)
-    df['bps_per_90'] = df['bps'] / (df['minutes'] / 90)
-    df['card_rate'] = df['cards'] / (df['minutes'] / 90)
-    
-    # New value metric: Points per game per Cost
     df['value_ppg_per_cost'] = df['points_per_game'] / df['price']
     
-    # Consistency metrics
-    df['coefficient_of_variation'] = df.groupby('position')['points_per_game'].transform(lambda x: x.std() / x.mean())
-    df['reliable_starter_score'] = df['starts'] / df['minutes'] * 90
-    
-    # Team reliance metrics
-    team_goals = df.groupby('team')['goals_scored'].transform('sum')
-    team_assists = df.groupby('team')['assists'].transform('sum')
-    df['team_reliance_goals'] = df['goals_scored'] / team_goals
-    df['team_reliance_assists'] = df['assists'] / team_assists
+    # Map element_type to position
+    position_map = {1: 'GK', 2: 'DEF', 3: 'MID', 4: 'FWD'}
+    df['position'] = df['element_type'].map(position_map)
     
     return df
 
-# Utility functions for tables and charts
 def create_table(data: pd.DataFrame, columns: List[str], sort_by: str = 'total_points', ascending: bool = False) -> None:
+    # Ensure unique columns
+    unique_columns = list(dict.fromkeys(columns))
+    
+    
+    # Check if sort_by column exists in the dataframe
+    if sort_by not in data.columns:
+        st.warning(f"Sort column '{sort_by}' not found. Sorting by the first column instead.")
+        sort_by = unique_columns[0]
+    
     sorted_data = data.sort_values(sort_by, ascending=ascending)
-    st.dataframe(sorted_data[columns], use_container_width=True)
+    
+    # Ensure all columns exist in the dataframe
+    existing_columns = [col for col in unique_columns if col in sorted_data.columns]
+    
+    if len(existing_columns) != len(unique_columns):
+        missing_columns = set(unique_columns) - set(existing_columns)
+        st.warning(f"Some columns were not found in the data: {', '.join(missing_columns)}")
+    
+    st.dataframe(sorted_data[existing_columns], use_container_width=True)
 
 def create_value_analysis_chart(data: pd.DataFrame) -> alt.Chart:
     return alt.Chart(data).mark_circle().encode(
@@ -164,13 +195,12 @@ def run_dashboard():
     if players_to_compare:
         comparison_data = data[data['web_name'].isin(players_to_compare)]
         
-        # Create a unique list of columns for comparison
-        comparison_columns = list(dict.fromkeys(
-            overview_columns +
-            attacking_columns[3:] +
-            defensive_columns[3:] +
-            value_columns[3:]
-        ))
+        comparison_columns = [
+            'web_name', 'team', 'position', 'price', 'total_points', 'points_per_game', 'minutes', 'form',
+            'goals_scored', 'assists', 'expected_goals', 'expected_assists', 'goal_involvement_per_90', 'xGI_per_90',
+            'clean_sheets', 'goals_conceded', 'saves', 'yellow_cards', 'red_cards',
+            'value_ppg_per_cost', 'points_per_90'
+        ]
         
         st.dataframe(comparison_data[comparison_columns])
     else:
