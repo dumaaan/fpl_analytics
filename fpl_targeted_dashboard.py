@@ -100,7 +100,7 @@ def create_table(data: pd.DataFrame, columns: List[str], sort_by: str = 'total_p
         missing_columns = set(unique_columns) - set(existing_columns)
         st.warning(f"Some columns were not found in the data: {', '.join(missing_columns)}")
     
-    st.dataframe(sorted_data[existing_columns], use_container_width=True)
+    st.dataframe(sorted_data[existing_columns], use_container_width=True) 
 
 def create_value_analysis_chart(data: pd.DataFrame) -> alt.Chart:
     return alt.Chart(data).mark_circle().encode(
@@ -141,7 +141,9 @@ def run_dashboard():
 
     # Enhanced filtering
     st.sidebar.header("Filters")
-    position = st.sidebar.multiselect("Select Positions", options=["All"] + sorted(data["position"].unique()), default="All")
+    position = st.sidebar.multiselect("Select Positions", 
+                                  options=["All"] + sorted(data["position"].astype(str).unique()), 
+                                  default="All")
     teams = st.sidebar.multiselect("Select Teams", options=["All"] + sorted(data["team"].unique()), default="All")
     price_range = st.sidebar.slider("Price Range", float(data["price"].min()), float(data["price"].max()), (float(data["price"].min()), float(data["price"].max())))
     min_points = st.sidebar.number_input("Minimum Total Points", min_value=0, value=0)
