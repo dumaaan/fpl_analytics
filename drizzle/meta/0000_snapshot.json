@@ -1,0 +1,419 @@
+{
+  "id": "ae39558d-6ad7-4245-92e5-9b2a97c25dd6",
+  "prevId": "00000000-0000-0000-0000-000000000000",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "public.data_refresh_log": {
+      "name": "data_refresh_log",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "refreshed_at": {
+          "name": "refreshed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "player_count": {
+          "name": "player_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.players": {
+      "name": "players",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "code": {
+          "name": "code",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "web_name": {
+          "name": "web_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "first_name": {
+          "name": "first_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "second_name": {
+          "name": "second_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "team_id": {
+          "name": "team_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "team_name": {
+          "name": "team_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "element_type": {
+          "name": "element_type",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "position": {
+          "name": "position",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "now_cost": {
+          "name": "now_cost",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "total_points": {
+          "name": "total_points",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "points_per_game": {
+          "name": "points_per_game",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "minutes": {
+          "name": "minutes",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "goals_scored": {
+          "name": "goals_scored",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "assists": {
+          "name": "assists",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "clean_sheets": {
+          "name": "clean_sheets",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "goals_conceded": {
+          "name": "goals_conceded",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "own_goals": {
+          "name": "own_goals",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "penalties_saved": {
+          "name": "penalties_saved",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "penalties_missed": {
+          "name": "penalties_missed",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "yellow_cards": {
+          "name": "yellow_cards",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "red_cards": {
+          "name": "red_cards",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "saves": {
+          "name": "saves",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "bonus": {
+          "name": "bonus",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "bps": {
+          "name": "bps",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "starts": {
+          "name": "starts",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "influence": {
+          "name": "influence",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "creativity": {
+          "name": "creativity",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "threat": {
+          "name": "threat",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "ict_index": {
+          "name": "ict_index",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "expected_goals": {
+          "name": "expected_goals",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "expected_assists": {
+          "name": "expected_assists",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "expected_goal_involvements": {
+          "name": "expected_goal_involvements",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "expected_goals_conceded": {
+          "name": "expected_goals_conceded",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "selected_by_percent": {
+          "name": "selected_by_percent",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "form": {
+          "name": "form",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "price": {
+          "name": "price",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "goals_per_90": {
+          "name": "goals_per_90",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "assists_per_90": {
+          "name": "assists_per_90",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "xg_per_90": {
+          "name": "xg_per_90",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "xa_per_90": {
+          "name": "xa_per_90",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "points_per_million": {
+          "name": "points_per_million",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "points_per_90": {
+          "name": "points_per_90",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "value_added": {
+          "name": "value_added",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "goal_involvement_per_90": {
+          "name": "goal_involvement_per_90",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "xgi_per_90": {
+          "name": "xgi_per_90",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "goal_involvement_overperformance": {
+          "name": "goal_involvement_overperformance",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "clean_sheet_percentage": {
+          "name": "clean_sheet_percentage",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "saves_per_90": {
+          "name": "saves_per_90",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "goals_conceded_per_90": {
+          "name": "goals_conceded_per_90",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "bonus_points_per_90": {
+          "name": "bonus_points_per_90",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "bps_per_90": {
+          "name": "bps_per_90",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "ict_index_per_90": {
+          "name": "ict_index_per_90",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "total_contribution_per_90": {
+          "name": "total_contribution_per_90",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "minutes_per_goal_involvement": {
+          "name": "minutes_per_goal_involvement",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "points_per_minute": {
+          "name": "points_per_minute",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "card_rate": {
+          "name": "card_rate",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    }
+  },
+  "enums": {},
+  "schemas": {},
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "views": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}

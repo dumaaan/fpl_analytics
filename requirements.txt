@@ -1,5 +1,0 @@
-altair
-duckdb
-pandas
-streamlit
-numpy

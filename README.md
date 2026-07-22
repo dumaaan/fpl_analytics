@@ -1,48 +1,46 @@
-# FPL Analytics Dashboard
+# FPL Analytics
 
-Welcome to the FPL (Fantasy Premier League) Analytics Dashboard! This dashboard is designed to help fantasy football enthusiasts make data-driven decisions to optimize their FPL strategies. The dashboard provides a comprehensive view of player statistics, performance metrics, and visualizations to enhance your FPL experience.
+A Fantasy Premier League player-stats dashboard: filter by position/price/points/minutes and explore value, form, differential, and risk metrics across 8 charts, backed by real FPL API data refreshed on a schedule.
 
-## Features
+## Stack
 
-- **Interactive Data Tables**: Sort and view player statistics including goals, assists, points per game, and more.
-- **Dynamic Filtering**: Filter players by position, team, price range, and minimum total points to narrow down your selections.
-- **Visual Analytics**: Explore data through interactive charts that display value analysis and form momentum of players.
-- **Player Comparison**: Select up to three players to compare their detailed performance statistics side by side.
-- **Statistical Insights**: View key statistical indicators such as average, median, and 90th percentile values for various performance metrics.
-- **Data Export**: Download the filtered player data as a CSV file for your own analysis.
+- **Next.js (App Router) + TypeScript**, deployed on Vercel
+- **Postgres on Supabase**, queried with **Drizzle ORM**
+- **Recharts** for the scatter/bubble charts
+- A **GitHub Actions** cron job refreshes player data from the live FPL API every 3 hours
 
-## Dashboard Layout
+## How it works
 
-- **Overview Tab**: Displays general player statistics and key visualizations.
-- **Attacking Stats Tab**: Focuses on offensive metrics like goals scored and expected goals.
-- **Defensive Stats Tab**: Shows data related to defensive efforts including clean sheets and goals conceded.
-- **Value Metrics Tab**: Analyzes players' performance relative to their cost.
+- `scripts/ingest/fetch-and-upsert.ts` fetches `https://fantasy.premierleague.com/api/bootstrap-static/`, computes derived metrics (value added, per-90 stats, etc. — ported from the project's original dbt model) in `scripts/ingest/metrics.ts`, and upserts one row per player into a single `players` table plus a `data_refresh_log` row.
+- The app (`app/page.tsx`) reads that table server-side and renders the dashboard — no live API calls on page load, so it's fast and doesn't depend on FPL's API uptime per-request.
+- `.github/workflows/refresh-data.yml` runs the ingest script on a schedule (and via manual `workflow_dispatch`).
 
-## Technology
+**Known v1 limitation**: this only stores the current season snapshot, not gameweek-by-gameweek history. The old dashboard's "consistency score" metric required per-gameweek data and was dropped as a result (see the note in the Form Analysis section of the dashboard) — the "Form" chart shows form vs. points-per-game instead.
 
-This dashboard is built using Python with the following key libraries:
-- **Streamlit**: For creating the web application.
-- **Pandas**: For data manipulation and analysis.
-- **Altair**: For generating interactive visualizations.
-- **Requests**: For fetching data from the FPL API.
+## Local development
 
-## Data Source
+1. Copy `.env.example` to `.env.local` and fill in your Supabase connection strings (Project Settings → Database → Connection string):
+   - `DATABASE_URL` — Transaction pooler (port 6543), used by the app
+   - `DIRECT_DATABASE_URL` — Session pooler (port 5432), used for migrations
+   - `SUPABASE_DB_URL` — Session pooler, used by the ingest script (this one also needs to be set as a GitHub Actions repo secret for the scheduled refresh)
 
-The data is sourced in real-time from the official Fantasy Premier League API, ensuring that the dashboard reflects the most current information available.
+2. Install dependencies and set up the database:
 
-## Usage
+   ```bash
+   npm install
+   npm run db:generate   # generate SQL migration from lib/db/schema.ts
+   npm run db:migrate    # apply it to Supabase
+   npm run ingest        # fetch live FPL data and seed the players table
+   ```
 
-To run the dashboard locally, you will need Python installed on your machine along with the required libraries. You can install the dependencies using:
+3. Run the app:
 
-```bash
-pip install streamlit pandas altair requests
-```
-To start the application, run the following command in your terminal:
+   ```bash
+   npm run dev
+   ```
 
-```
-streamlit run app.py
-```
+## Deploying
 
-Replace app.py with the path to the script file if your file name or directory is different.
-
-
+1. Push to GitHub, import the repo in Vercel, and set `DATABASE_URL` as a Vercel environment variable.
+2. Add `SUPABASE_DB_URL` as a GitHub Actions repository secret (Settings → Secrets and variables → Actions) so the scheduled refresh workflow can write to the database.
+3. Trigger the workflow once manually (Actions tab → Refresh FPL data → Run workflow) to confirm the scheduled refresh works end to end.
