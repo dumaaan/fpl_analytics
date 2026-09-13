@@ -1,46 +1,73 @@
 # FPL Analytics
 
-A Fantasy Premier League player-stats dashboard: filter by position/price/points/minutes and explore value, form, differential, and risk metrics across 8 charts, backed by real FPL API data refreshed on a schedule.
+A local Fantasy Premier League analytics tool. It has two parts: a data pipeline and a dashboard.
 
 ## Stack
 
-- **Next.js (App Router) + TypeScript**, deployed on Vercel
-- **Postgres on Supabase**, queried with **Drizzle ORM**
-- **Recharts** for the scatter/bubble charts
-- A **GitHub Actions** cron job refreshes player data from the live FPL API every 3 hours
+- **Python** for both parts.
+- **DuckDB** for the database. It is one file on disk. It needs no server.
+- **Streamlit** for the dashboard.
+- **Altair** for the charts.
+- **pandas** for all data transforms.
 
-## How it works
+The tool runs on your machine only. It does not need the internet after a data refresh, except to load the FPL API during that refresh.
 
-- `scripts/ingest/fetch-and-upsert.ts` fetches `https://fantasy.premierleague.com/api/bootstrap-static/`, computes derived metrics (value added, per-90 stats, etc. — ported from the project's original dbt model) in `scripts/ingest/metrics.ts`, and upserts one row per player into a single `players` table plus a `data_refresh_log` row.
-- The app (`app/page.tsx`) reads that table server-side and renders the dashboard — no live API calls on page load, so it's fast and doesn't depend on FPL's API uptime per-request.
-- `.github/workflows/refresh-data.yml` runs the ingest script on a schedule (and via manual `workflow_dispatch`).
+## Project layout
 
-**Known v1 limitation**: this only stores the current season snapshot, not gameweek-by-gameweek history. The old dashboard's "consistency score" metric required per-gameweek data and was dropped as a result (see the note in the Form Analysis section of the dashboard) — the "Form" chart shows form vs. points-per-game instead.
+```
+fpl_analytics/          # the pipeline package
+  fetch/                 # calls to the FPL API
+  transform/             # raw data -> clean tables -> derived metrics
+  db.py                  # DuckDB helpers
+  pipeline.py            # runs fetch -> transform -> load, in order
 
-## Local development
+dashboard/               # the Streamlit app
+  app.py                 # main page: Overview
+  pages/                 # Positions, Player Detail, Fixtures
+  charts.py              # shared chart-building code
+  queries.py             # shared DuckDB read code
 
-1. Copy `.env.example` to `.env.local` and fill in your Supabase connection strings (Project Settings → Database → Connection string):
-   - `DATABASE_URL` — Transaction pooler (port 6543), used by the app
-   - `DIRECT_DATABASE_URL` — Session pooler (port 5432), used for migrations
-   - `SUPABASE_DB_URL` — Session pooler, used by the ingest script (this one also needs to be set as a GitHub Actions repo secret for the scheduled refresh)
+data/                    # gitignored: the DuckDB file and raw API snapshots
+```
 
-2. Install dependencies and set up the database:
+## Setup
+
+1. Create a virtual environment and install packages:
 
    ```bash
-   npm install
-   npm run db:generate   # generate SQL migration from lib/db/schema.ts
-   npm run db:migrate    # apply it to Supabase
-   npm run ingest        # fetch live FPL data and seed the players table
+   python3 -m venv .venv
+   source .venv/bin/activate
+   pip install -r requirements.txt
    ```
 
-3. Run the app:
+2. Run the pipeline. This fetches FPL data and builds the database file:
 
    ```bash
-   npm run dev
+   python -m fpl_analytics.pipeline
    ```
 
-## Deploying
+   This step calls the FPL API once per player (about 700-800 calls), so it takes a few minutes. Run it again any time you want fresh data — for example, before or after a gameweek.
 
-1. Push to GitHub, import the repo in Vercel, and set `DATABASE_URL` as a Vercel environment variable.
-2. Add `SUPABASE_DB_URL` as a GitHub Actions repository secret (Settings → Secrets and variables → Actions) so the scheduled refresh workflow can write to the database.
-3. Trigger the workflow once manually (Actions tab → Refresh FPL data → Run workflow) to confirm the scheduled refresh works end to end.
+3. Run the dashboard:
+
+   ```bash
+   streamlit run dashboard/app.py
+   ```
+
+## Dashboard pages
+
+- **Overview** — filters (position, price, points, minutes) and 8 charts: value, performance vs expectation, form, goalkeepers, differentials, bonus points, overall contribution, and risk. Plus a CSV export button.
+- **Positions** — top-10 leaderboards per position, with a percentile bar per player. Plus a "Market Movers" section: biggest price risers/fallers and biggest transfers in/out.
+- **Player Detail** — pick one player, then see 6 trend charts across the season: points, minutes, goals vs expected goals, ICT index, price, and ownership.
+- **Fixtures** — a difficulty ticker: each team's next 5 fixtures, colored by difficulty.
+
+## Data model
+
+The pipeline writes 4 tables into `data/fpl.duckdb`:
+
+- `stg_teams` — team identity and strength ratings.
+- `stg_fixtures` — every match this season, with difficulty ratings.
+- `stg_player_gameweek_history` — one row per player per gameweek played. This powers the trend charts.
+- `mart_players` — one row per player: identity, season totals, and every derived metric (value added, per-90 stats, consistency score, and so on).
+
+Each pipeline run replaces these tables in full — the FPL API returns full current-state data each time, not just changes, so there is no merge step.
