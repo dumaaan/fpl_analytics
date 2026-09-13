@@ -23,13 +23,14 @@ player = players[players["id"] == player_id].iloc[0]
 
 st.subheader(f"{player['web_name']} — {player['team_name']} ({player['position']})")
 
-metric_cols = st.columns(6)
+metric_cols = st.columns(7)
 metric_cols[0].metric("Price", f"£{player['price']:.1f}m")
 metric_cols[1].metric("Total Points", int(player["total_points"]))
 metric_cols[2].metric("Form", f"{player['form']:.1f}")
 metric_cols[3].metric("Selected By", f"{player['selected_by_percent']:.1f}%")
 metric_cols[4].metric("Minutes", int(player["minutes"]))
-metric_cols[5].metric("Value Added", f"{player['value_added']:.2f}")
+metric_cols[5].metric("VAPM", f"{player['vapm']:.2f}")
+metric_cols[6].metric("Expected Points (Next GW)", f"{player['ep_next']:.1f}")
 
 if player["news"]:
     st.info(player["news"])
@@ -82,5 +83,19 @@ with chart_cols3[0]:
 with chart_cols3[1]:
     st.altair_chart(
         line_chart(history, "round", "selected", "Gameweek", "Owners", "Ownership Over Time"),
+        width="stretch",
+    )
+
+if player["position"] != "GK":
+    st.caption(
+        "Defensive Contribution per gameweek — the combined stat (CBIT for "
+        "defenders, CBIRT for midfielders/forwards) that needs to cross 10 or "
+        "12 respectively to earn the 2-point bonus that match."
+    )
+    st.altair_chart(
+        line_chart(
+            history, "round", "defensive_contribution", "Gameweek", "Defensive Contribution",
+            "Defensive Contribution per Gameweek",
+        ),
         width="stretch",
     )

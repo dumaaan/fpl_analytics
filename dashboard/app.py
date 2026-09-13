@@ -57,6 +57,17 @@ st.download_button(
 )
 
 st.header("Value Analysis")
+with st.expander("What does \"value\" mean here?", expanded=False):
+    st.markdown(
+        "- **Points per Million (PPM)** is just total points divided by price. "
+        "It rewards any nailed-on starter, even one who only ever earns the automatic "
+        "appearance points (2 for playing 60+ minutes, 1 for playing at all).\n"
+        "- **Value Added per Million (VAPM)** removes those appearance points first: "
+        "for every gameweek, it subtracts what the player would have scored just for "
+        "being on the pitch, averages what's left, and divides by price. A player who "
+        "only ever earns appearance points scores 0 VAPM, however cheap they are — "
+        "the size of the bubble below is VAPM, not raw points."
+    )
 st.altair_chart(
     scatter_chart(
         filtered,
@@ -64,16 +75,16 @@ st.altair_chart(
         y="total_points",
         x_title="Price (£m)",
         y_title="Total Points",
-        title="Total Points vs Price (size: Value Added)",
-        size_field="value_added",
-        tooltip=["web_name", "team_name", "price", "total_points", "value_added", "points_per_million"],
+        title="Total Points vs Price (size: Value Added per Million)",
+        size_field="vapm",
+        tooltip=["web_name", "team_name", "price", "total_points", "vapm", "points_per_million"],
     ),
     width="stretch",
 )
-st.subheader("Top 10 by Value Added")
+st.subheader("Top 10 by Value Added per Million (VAPM)")
 st.dataframe(
-    filtered.sort_values("value_added", ascending=False)
-    .head(10)[["web_name", "team_name", "position", "price", "value_added", "points_per_million", "total_points"]],
+    filtered.sort_values("vapm", ascending=False)
+    .head(10)[["web_name", "team_name", "position", "price", "vapm", "points_per_million", "total_points"]],
     width="stretch",
     hide_index=True,
 )
@@ -116,13 +127,39 @@ if position in ("GK", "All"):
             scatter_chart(
                 gk_data,
                 x="saves_per_90",
-                y="clean_sheet_percentage",
+                y="clean_sheets_per_90",
                 x_title="Saves per 90",
-                y_title="Clean Sheet %",
-                title="Saves per 90 vs Clean Sheet % (size: Total Points)",
+                y_title="Clean Sheets per 90",
+                title="Saves per 90 vs Clean Sheets per 90 (size: Total Points)",
                 color_field=None,
                 size_field="total_points",
-                tooltip=["web_name", "team_name", "saves_per_90", "clean_sheet_percentage", "goals_conceded_per_90", "total_points"],
+                tooltip=["web_name", "team_name", "saves_per_90", "clean_sheets_per_90", "goals_conceded_per_90", "total_points"],
+            ),
+            width="stretch",
+        )
+
+if position != "GK":
+    defensive_data = filtered[filtered["position"] != "GK"].copy()
+    if not defensive_data.empty:
+        defensive_data["defcon_hit_rate_pct"] = defensive_data["defcon_hit_rate"] * 100
+        st.header("Defensive Contribution")
+        st.caption(
+            "New for 2025/26: defenders earn 2 points for 10+ combined clearances, "
+            "blocks, interceptions and tackles (CBIT) in a match; midfielders and "
+            "forwards need 12+ including ball recoveries (CBIRT). Goalkeepers are not "
+            "eligible. \"Hit Rate\" is how often a player crosses their threshold in "
+            "games they actually played."
+        )
+        st.altair_chart(
+            scatter_chart(
+                defensive_data,
+                x="defensive_contribution_per_90",
+                y="defcon_hit_rate_pct",
+                x_title="Defensive Contribution per 90",
+                y_title="DefCon Hit Rate %",
+                title="Defensive Contribution per 90 vs Hit Rate (size: Total Points)",
+                size_field="total_points",
+                tooltip=["web_name", "team_name", "defensive_contribution_per_90", "defcon_hit_rate_pct", "cbit", "cbirt", "total_points"],
             ),
             width="stretch",
         )
@@ -135,9 +172,9 @@ st.altair_chart(
         y="total_points",
         x_title="Selected By %",
         y_title="Total Points",
-        title="Total Points vs Selection % (size: Value Added)",
-        size_field="value_added",
-        tooltip=["web_name", "team_name", "selected_by_percent", "total_points", "value_added", "points_per_million"],
+        title="Total Points vs Selection % (size: Value Added per Million)",
+        size_field="vapm",
+        tooltip=["web_name", "team_name", "selected_by_percent", "total_points", "vapm", "points_per_million"],
     ),
     width="stretch",
 )

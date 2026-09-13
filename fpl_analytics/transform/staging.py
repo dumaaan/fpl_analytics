@@ -42,6 +42,8 @@ PLAYER_RAW_NUMERIC_STRING_COLUMNS = [
     "form",
     "value_form",
     "value_season",
+    "ep_next",
+    "ep_this",
 ]
 
 PLAYER_RAW_COLUMNS = [
@@ -77,7 +79,17 @@ PLAYER_RAW_COLUMNS = [
     "dreamteam_count",
     "in_dreamteam",
     "chance_of_playing_next_round",
+    "chance_of_playing_this_round",
+    "status",
     "news",
+    "event_points",
+    "starts_per_90",
+    "clean_sheets_per_90",
+    "defensive_contribution",
+    "defensive_contribution_per_90",
+    "clearances_blocks_interceptions",
+    "recoveries",
+    "tackles",
     *PLAYER_RAW_NUMERIC_STRING_COLUMNS,
 ]
 
@@ -117,6 +129,10 @@ HISTORY_COLUMNS = [
     "selected",
     "transfers_in",
     "transfers_out",
+    "defensive_contribution",
+    "clearances_blocks_interceptions",
+    "recoveries",
+    "tackles",
     *HISTORY_NUMERIC_STRING_COLUMNS,
 ]
 
@@ -133,6 +149,9 @@ def build_players_raw_df(bootstrap_data: dict) -> pd.DataFrame:
     df["position"] = df["element_type"].map(POSITION_BY_ELEMENT_TYPE).fillna("Unknown")
     df["chance_of_playing_next_round"] = pd.to_numeric(
         df["chance_of_playing_next_round"], errors="coerce"
+    )
+    df["chance_of_playing_this_round"] = pd.to_numeric(
+        df["chance_of_playing_this_round"], errors="coerce"
     )
     return df
 
