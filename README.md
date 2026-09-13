@@ -5,6 +5,7 @@ A local Fantasy Premier League analytics tool. It has two parts: a data pipeline
 ## Stack
 
 - **Python** for both parts.
+- **Poetry** for packages and the virtual environment. It sets both up in one command.
 - **DuckDB** for the database. It is one file on disk. It needs no server.
 - **Streamlit** for the dashboard.
 - **Altair** for the charts.
@@ -32,18 +33,18 @@ data/                    # gitignored: the DuckDB file and raw API snapshots
 
 ## Setup
 
-1. Create a virtual environment and install packages:
+Install [Poetry](https://python-poetry.org/docs/#installation) once, if you do not have it. Then, from the project folder:
+
+1. Install packages. Poetry creates the virtual environment for you, in `.venv`:
 
    ```bash
-   python3 -m venv .venv
-   source .venv/bin/activate
-   pip install -r requirements.txt
+   poetry install
    ```
 
 2. Run the pipeline. This fetches FPL data and builds the database file:
 
    ```bash
-   python -m fpl_analytics.pipeline
+   poetry run fpl-pipeline
    ```
 
    This step calls the FPL API once per player (about 700-800 calls), so it takes a few minutes. Run it again any time you want fresh data — for example, before or after a gameweek.
@@ -51,8 +52,10 @@ data/                    # gitignored: the DuckDB file and raw API snapshots
 3. Run the dashboard:
 
    ```bash
-   streamlit run dashboard/app.py
+   poetry run fpl-dashboard
    ```
+
+No `source .venv/bin/activate` step is needed — `poetry run` finds the right environment on its own. If you prefer an activated shell, `poetry shell` also works, and then the plain commands (`python -m fpl_analytics.pipeline`, `streamlit run dashboard/app.py`) work too.
 
 ## Dashboard pages
 
