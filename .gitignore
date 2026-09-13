@@ -1,0 +1,16 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+
+# data
+data/*.duckdb
+data/raw/*.json
+
+# OS
+.DS_Store
+
+# streamlit
+.streamlit/secrets.toml
