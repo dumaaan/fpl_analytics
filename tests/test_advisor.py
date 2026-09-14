@@ -155,3 +155,51 @@ def test_small_upgrade_is_watch_not_sell():
     gain = max(p.gain for p in singles if p.outs == [13])
     assert 1.5 <= gain < 5.5
     assert verdicts.loc[13, "verdict"] == WATCH
+
+
+def _market_with_names(market: pd.DataFrame) -> pd.DataFrame:
+    return market.assign(team_short=market["team"].astype(str), status_label="Available", start_rate=1.0,
+                         price_change_tonight_pct=0.0, ep_next=0.0)
+
+
+def test_apply_transfers_updates_squad_bank_and_prices():
+    from fpl_analytics.advisor import MadeTransfer, apply_transfers
+    squad, market = _players()
+    squad["team_short"] = squad["team"].astype(str)
+    squad["pick_order"] = range(1, 16)
+    players = pd.concat([squad, _market_with_names(market)], ignore_index=True)
+    new, bank, problems = apply_transfers(squad, players, bank=5, transfers=[MadeTransfer(13, 100)])
+    assert problems == []
+    assert 13 not in new["id"].tolist() and 100 in new["id"].tolist()
+    assert bank == 5 + 50 - 55
+    bought = new.set_index("id").loc[100]
+    assert bought["purchase_cost"] == 55 and bought["sell_cost"] == 55
+
+
+def test_apply_transfers_reports_illegal_moves():
+    from fpl_analytics.advisor import MadeTransfer, apply_transfers
+    squad, market = _players()
+    squad["team_short"] = squad["team"].astype(str)
+    squad["pick_order"] = range(1, 16)
+    players = pd.concat([squad, _market_with_names(market)], ignore_index=True)
+    _, _, over_budget = apply_transfers(squad, players, bank=0, transfers=[MadeTransfer(13, 101)])
+    assert any("more than the bank" in p for p in over_budget)
+    _, _, wrong_position = apply_transfers(squad, players, bank=100, transfers=[MadeTransfer(1, 100)])
+    assert any("must keep the position" in p for p in wrong_position)
+    squad.loc[squad["id"].isin([2, 3]), "team"] = 1
+    players = pd.concat([squad, _market_with_names(market)], ignore_index=True)
+    _, _, club = apply_transfers(squad, players, bank=100, transfers=[MadeTransfer(13, 103)])
+    assert any("The limit is 3" in p for p in club)
+
+
+def test_squad_change_counts_the_hit():
+    from fpl_analytics.advisor import MadeTransfer, apply_transfers, squad_change, transfer_hit
+    squad, market = _players()
+    squad["team_short"] = squad["team"].astype(str)
+    squad["pick_order"] = range(1, 16)
+    players = pd.concat([squad, _market_with_names(market)], ignore_index=True)
+    new, _, _ = apply_transfers(squad, players, bank=5, transfers=[MadeTransfer(13, 100)])
+    assert transfer_hit(1, free_transfers=1) == 0 and transfer_hit(2, free_transfers=1) == 4
+    result = squad_change(squad, new, VALUE, hit=4)
+    assert result["change"] > 0
+    assert np.isclose(result["net"], result["change"] - 4)

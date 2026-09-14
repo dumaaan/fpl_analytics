@@ -13,6 +13,7 @@ from dashboard.charts import (
 )
 from dashboard.common import ease_cell_style, load_players_or_stop, position_percentiles
 from dashboard.queries import get_player_history, get_team_fixtures
+from fpl_analytics.config import MIN_MINUTES_FOR_PER_90
 
 NO_COMPARE = -1
 
@@ -122,9 +123,10 @@ with left:
     if other is not None and other["position"] != position:
         st.caption(f"{other['web_name']} plays {other['position']}, so the profile shows {player['web_name']} only.")
     if profile.empty:
-        st.caption("Percentiles need 270+ minutes this season.")
+        st.caption(f"Percentiles need {MIN_MINUTES_FOR_PER_90}+ minutes this season.")
     else:
-        st.caption("100 = best in the position among players with 270+ minutes. For xGC/90 and Mins/xGI, lower values rank higher.")
+        st.caption(f"100 = best in the position among players with {MIN_MINUTES_FOR_PER_90}+ minutes. "
+                   "For xGC/90 and Mins/xGI, lower values rank higher.")
         st.altair_chart(percentile_profile_chart(profile), width="stretch")
 
 with right:

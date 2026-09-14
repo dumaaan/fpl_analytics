@@ -1,6 +1,7 @@
 import altair as alt
 import pandas as pd
 
+from fpl_analytics.config import MIN_MINUTES_FOR_PER_90
 from fpl_analytics.transform.scoring import POINT_SOURCES
 
 # Validated categorical palette (dataviz skill references/palette.md).
@@ -139,7 +140,7 @@ def percentile_profile_chart(profile: pd.DataFrame) -> alt.Chart:
     metric_order = list(dict.fromkeys(profile["metric"]))
     base = alt.Chart(profile).encode(
         y=alt.Y("metric:N", sort=metric_order, title=None, axis=alt.Axis(labelOverlap=False)),
-        x=alt.X("percentile:Q", title="Percentile vs position (270+ mins)", scale=alt.Scale(domain=[0, 100])),
+        x=alt.X("percentile:Q", title=f"Percentile vs position ({MIN_MINUTES_FOR_PER_90}+ mins)", scale=alt.Scale(domain=[0, 100])),
     )
     bars = base.mark_bar(cornerRadiusEnd=3, height={"band": 0.8}).encode(
         color=alt.Color("player:N", scale=alt.Scale(domain=players, range=[SERIES_1, SERIES_2][: len(players)]),

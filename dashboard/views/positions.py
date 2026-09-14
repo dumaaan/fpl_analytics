@@ -104,7 +104,7 @@ def _player_table(position: str, position_players: pd.DataFrame, filtered: pd.Da
         **metric_column_config(metric_keys),
         "xpts_pct": st.column_config.ProgressColumn(
             "xPts/90 pct", min_value=0, max_value=100, format="%.0f",
-            help="Percentile of xPts/90 among players in this position with 270+ minutes.",
+            help=f"Percentile of xPts/90 among players in this position with {MIN_MINUTES_FOR_PER_90}+ minutes.",
         ),
     }
 

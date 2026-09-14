@@ -3,6 +3,8 @@ the column set, chart axes and percentile profile for each position page."""
 
 from dataclasses import dataclass
 
+from fpl_analytics.config import MIN_MINUTES_FOR_PER_90
+
 
 @dataclass(frozen=True)
 class Metric:
@@ -21,7 +23,7 @@ _METRICS = [
     Metric("minutes", "Mins", "Minutes played this season.", "%d"),
     Metric("xpts_next_gw", "xPts next GW",
            "Projected points for the next gameweek. Uses per-90 rates, start rate, availability and "
-           "the fixture model. 0 means a blank gameweek. Empty below 270 minutes.", "%.1f"),
+           f"the fixture model. 0 means a blank gameweek. Empty below {MIN_MINUTES_FOR_PER_90} minutes.", "%.1f"),
     Metric("xpts_next_3gw", "xPts next 3 GW", "Projected points for the next 3 gameweeks.", "%.1f"),
     Metric("xpts_next_5gw", "xPts next 5 GW", "Projected points for the next 5 gameweeks.", "%.1f"),
     Metric("xpts_per_90", "xPts/90",
