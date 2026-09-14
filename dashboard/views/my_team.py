@@ -7,6 +7,8 @@ from dashboard.common import load_players_or_stop
 from dashboard.queries import get_events
 from fpl_analytics.advisor import (
     HORIZON_COLUMNS,
+    MadeTransfer,
+    apply_transfers,
     best_lineup,
     build_squad,
     candidate_pool,
@@ -15,9 +17,11 @@ from fpl_analytics.advisor import (
     purchase_costs,
     recommend,
     search_transfers,
+    squad_change,
+    transfer_hit,
     with_fallback_projection,
 )
-from fpl_analytics.config import ENTRY_PICKS_URL, MAX_FREE_TRANSFERS, MIN_GAIN_PER_GW
+from fpl_analytics.config import ENTRY_PICKS_URL, MAX_FREE_TRANSFERS, MIN_GAIN_PER_GW, MIN_MINUTES_FOR_PER_90
 from fpl_analytics.fetch.client import fetch_json
 from fpl_analytics.fetch.entry import fetch_team
 
@@ -35,6 +39,11 @@ VERDICT_STYLES = {
 
 def money(tenths: float) -> str:
     return f"£{tenths / 10:.1f}m"
+
+
+def signed(value: float) -> str:
+    """+1.2 / -1.2 / +0.0, never "-0.0" from float noise."""
+    return f"{round(value, 1) + 0.0:+.1f}"
 
 
 @st.cache_data(ttl=600, show_spinner="Loading the team from FPL...")
@@ -139,16 +148,182 @@ horizon = st.segmented_control("Plan for", list(HORIZON_LABELS), format_func=HOR
 value_col = HORIZON_COLUMNS[horizon]
 value_label = f"xPts {HORIZON_LABELS[horizon].replace('Next', 'next')}"
 
+# --- Transfers already made ---------------------------------------------------
+def with_all_projections(frame: pd.DataFrame) -> pd.DataFrame:
+    for h, col in HORIZON_COLUMNS.items():
+        frame = with_fallback_projection(frame, col, h)
+    return frame
+
+
+def parse_made(text: str) -> list[MadeTransfer]:
+    made = []
+    for part in text.split(","):
+        out_text, _, in_text = part.partition("-")
+        if out_text.isdigit() and in_text.isdigit():
+            made.append(MadeTransfer(int(out_text), int(in_text)))
+    return made
+
+
+made_key = f"made_{team_id}"
+
+
+def save_made(transfers: list[MadeTransfer]) -> None:
+    st.session_state[made_key] = transfers
+    if transfers:
+        st.query_params["made"] = ",".join(f"{t.out_id}-{t.in_id}" for t in transfers)
+    else:
+        st.query_params.pop("made", None)
+
+
+def add_made() -> None:
+    """Button callback: runs before the next run, so the boxes can be cleared."""
+    out_id, in_id = st.session_state.get(f"made_out_{team_id}"), st.session_state.get(f"made_in_{team_id}")
+    if out_id is not None and in_id is not None:
+        save_made(st.session_state[made_key] + [MadeTransfer(int(out_id), int(in_id))])
+    st.session_state[f"made_out_{team_id}"] = None
+    st.session_state[f"made_in_{team_id}"] = None
+
+
+if made_key not in st.session_state:
+    st.session_state[made_key] = parse_made(st.query_params.get("made", ""))
+made: list[MadeTransfer] = st.session_state[made_key]
+names = players.set_index("id")
+
+st.subheader("Transfers you already made")
+st.caption(
+    f"FPL keeps transfers private until the next deadline, so transfers made since the GW{current_gw} deadline "
+    "are not in the squad above. Add them here to see if they were worth it, and to plan the rest of the page "
+    "from your new squad. Players you buy cost today's price from the last data refresh."
+)
+
+original_squad = with_all_projections(squad)
+current_squad, _, _ = apply_transfers(original_squad, players, bank, made)
+add_cols = st.columns([3, 3, 1.2], vertical_alignment="bottom")
+with add_cols[0]:
+    out_choice = st.selectbox(
+        "Player you sold", current_squad.sort_values(["position", "web_name"])["id"].astype(int).tolist(),
+        index=None, placeholder="Choose a squad player", key=f"made_out_{team_id}",
+        format_func=lambda pid: f"{names.loc[pid, 'web_name']} ({names.loc[pid, 'team_short']}, "
+                                f"{names.loc[pid, 'position']})",
+    )
+with add_cols[1]:
+    if out_choice is None:
+        in_options = []
+    else:
+        same_position = players[(players["position"] == names.loc[out_choice, "position"])
+                                & ~players["id"].isin(current_squad["id"])]
+        in_options = same_position.sort_values([value_col, "total_points"], ascending=False,
+                                               na_position="last")["id"].astype(int).tolist()
+    in_choice = st.selectbox(
+        "Player you bought", in_options, index=None, disabled=out_choice is None,
+        placeholder="Choose the sold player first" if out_choice is None else "Search for a player",
+        key=f"made_in_{team_id}",
+        format_func=lambda pid: f"{names.loc[pid, 'web_name']} ({names.loc[pid, 'team_short']}, "
+                                f"{money(names.loc[pid, 'now_cost'])})",
+    )
+with add_cols[2]:
+    st.button("Add transfer", disabled=in_choice is None, key=f"made_add_{team_id}", width="stretch",
+              on_click=add_made)
+
+use_new_squad = False
+if made:
+    squad_before = original_squad
+    for i, transfer in enumerate(made):
+        row = st.columns([6, 1], vertical_alignment="center")
+        sold = squad_before[squad_before["id"] == transfer.out_id]
+        sell_text = money(sold["sell_cost"].iloc[0]) if not sold.empty else ""
+        row[0].markdown(
+            f"{i + 1}. Sold **{names.loc[transfer.out_id, 'web_name']}** {sell_text} → bought "
+            f"**{names.loc[transfer.in_id, 'web_name']}** ({names.loc[transfer.in_id, 'team_short']}, "
+            f"{money(names.loc[transfer.in_id, 'now_cost'])})"
+        )
+        row[1].button("Remove", key=f"made_remove_{team_id}_{i}", on_click=save_made,
+                      args=(made[:i] + made[i + 1:],))
+        squad_before, _, _ = apply_transfers(squad_before, players, bank, [transfer])
+
+    new_squad, bank_after, problems = apply_transfers(original_squad, players, bank, made)
+    if problems:
+        for problem in problems:
+            st.error(problem)
+        st.caption("Fix or remove the transfers above. The rest of the page uses the squad at the last deadline.")
+    else:
+        new_squad = with_all_projections(new_squad)
+        hit = transfer_hit(len(made), int(free_transfers))
+        free_left = max(0, int(free_transfers) - len(made))
+
+        changes = {h: squad_change(original_squad, new_squad, col, hit) for h, col in HORIZON_COLUMNS.items()}
+        summary_cols = st.columns(4)
+        summary_cols[0].metric("Hit", f"−{hit}" if hit else "0", border=True,
+                               help="4 points for each transfer above your free transfers.")
+        summary_cols[1].metric("Bank after", money(bank_after), border=True)
+        summary_cols[2].metric("Free transfers left", free_left, border=True)
+        summary_cols[3].metric("Net change", f"{signed(changes[horizon]['net'])}", border=True,
+                               help=f"Best-lineup projected points over the {HORIZON_PHRASES[horizon]}: "
+                                    "after minus before, after the hit.")
+
+        st.dataframe(
+            pd.DataFrame([{
+                "Plan": HORIZON_LABELS[h], "Squad before": c["before"], "Squad after": c["after"],
+                "Change": c["change"], "Hit": -c["hit"], "Net change": c["net"],
+            } for h, c in changes.items()]),
+            hide_index=True,
+            column_config={col: st.column_config.NumberColumn(format="%+.1f" if col in ("Change", "Net change")
+                                                              else "%.1f")
+                           for col in ["Squad before", "Squad after", "Change", "Net change"]}
+            | {"Hit": st.column_config.NumberColumn(format="%d")},
+        )
+
+        net = changes[horizon]["net"]
+        threshold_now = MIN_GAIN_PER_GW * horizon
+        phrase = HORIZON_PHRASES[horizon]
+        if net >= threshold_now:
+            st.success(f"Worth it: {signed(net)} projected points over the {phrase} after the hit.")
+        elif net > 0:
+            st.info(f"A small gain: {signed(net)} projected points over the {phrase}. The advisor recommends moves "
+                    f"of {threshold_now:.1f}+ points, because a saved transfer also has value.")
+        else:
+            st.warning(f"Not worth it on projections: {signed(net)} points over the {phrase}. "
+                       "Your squad before these transfers projects higher.")
+
+        # Compare with the best move the advisor finds from the old squad.
+        if len(made) <= 2:
+            old_pool = candidate_pool(players, original_squad, value_col)
+            old_singles, old_pairs = search_transfers(original_squad, old_pool, bank, value_col, int(free_transfers))
+            alternatives = old_singles if len(made) == 1 else old_pairs
+            if alternatives:
+                best_alt = alternatives[0]
+                alt_text = " and ".join(
+                    f"{names.loc[o, 'web_name']} → {names.loc[i, 'web_name']}"
+                    for o, i in zip(best_alt.outs, best_alt.ins)
+                )
+                better = sum(1 for p in alternatives if p.net > net + 1e-9)
+                if best_alt.net <= net + 1e-9:
+                    st.caption(f"No move of the same size that the advisor checked scores higher "
+                               f"({len(alternatives)} checked).")
+                else:
+                    st.caption(
+                        f"Best alternative the advisor found from your old squad: {alt_text}, "
+                        f"{signed(best_alt.net)} net ({best_alt.net - net:.1f} more). {better} of the "
+                        f"{len(alternatives)} moves it checked score higher than yours."
+                    )
+
+        use_new_squad = st.toggle("Plan the rest of this page from the new squad", value=True,
+                                  key=f"made_apply_{team_id}")
+        if use_new_squad:
+            squad, bank, free_transfers = new_squad, bank_after, free_left
+
 # --- Analysis --------------------------------------------------------------
 squad = with_fallback_projection(squad, "xpts_next_gw", 1)
 if value_col != "xpts_next_gw":
     squad = with_fallback_projection(squad, value_col, horizon)
+if use_new_squad:
+    st.caption(f"The sections below use your squad after the transfers above: bank {money(bank)}, "
+               f"{free_transfers} free transfer{'s' if free_transfers != 1 else ''} left.")
 next_lineup = best_lineup(list(zip(squad["id"], squad["position"], squad["xpts_next_gw"].astype(float))))
 pool = candidate_pool(players, squad, value_col)
 singles, pairs = search_transfers(squad, pool, bank, value_col, int(free_transfers))
 plan = recommend(singles, pairs, horizon)
 rated = player_verdicts(squad, singles, value_col, horizon, next_lineup)
-names = players.set_index("id")
 threshold = MIN_GAIN_PER_GW * horizon
 
 
@@ -177,9 +352,9 @@ def plan_card(title: str, p) -> None:
                 f"→ buy **{in_row['web_name']}** ({in_row['team_short']}, {money(in_row['now_cost'])})"
             )
         cols = st.columns(4)
-        cols[0].metric("xPts gained", f"{p.gain:+.1f}")
+        cols[0].metric("xPts gained", signed(p.gain))
         cols[1].metric("Hit", f"−{p.hit}" if p.hit else "0")
-        cols[2].metric("Net gain", f"{p.net:+.1f}")
+        cols[2].metric("Net gain", signed(p.net))
         cols[3].metric("Bank after", money(p.bank_after))
 
 
@@ -197,7 +372,7 @@ else:
 st.subheader("Squad ratings")
 st.caption(
     f"Sell: unlikely to play, or an upgrade in budget adds {threshold + 4:.1f}+ xPts, enough to be worth a −4 hit. "
-    f"Watch: a doubt, few starts, under 270 minutes, a price fall tonight, or an upgrade of {threshold:.1f}+ xPts. "
+    f"Watch: a doubt, few starts, under {MIN_MINUTES_FOR_PER_90} minutes, a price fall tonight, or an upgrade of {threshold:.1f}+ xPts. "
     "Role is the best lineup for the next gameweek. Select a row to open the player page."
 )
 rated["pos_order"] = rated["position"].map(POSITION_ORDER)

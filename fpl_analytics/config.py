@@ -45,9 +45,12 @@ PLAYER_HISTORY_MAX_WORKERS = 15
 
 # Below this many minutes, "per 90" rates are extrapolated from too small a
 # sample to mean anything (a single-minute cameo where a player makes one
-# tackle "projects" to 90 defensive contributions per 90). Roughly 3 full
-# matches is the common analytics convention for a usable per-90 sample.
-MIN_MINUTES_FOR_PER_90 = 270
+# tackle "projects" to 90 defensive contributions per 90). 2 full matches.
+# Lowered from 270 early in 2026/27: the projection model pulls small samples
+# toward the position average, and on the 2025/26 backtest its projections
+# for players with 180-269 minutes had the lowest error of the methods tested
+# (1.88 points vs 2.03 for recent form, GW3-10).
+MIN_MINUTES_FOR_PER_90 = 180
 
 # Rates from a few games are noisy (one good game moves a 3-game hit rate from
 # 33% to 67%). Shrunk rates add this many "average" games for the position:

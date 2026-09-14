@@ -54,7 +54,8 @@ class ModelSettings:
 
 FIRST_VERSION = ModelSettings(minutes_model="start_rate")
 
-# Chosen with `fpl-backtest` on 2025/26: tuned on GW4-20, checked on GW21-38,
+# Chosen with `fpl-backtest` on 2025/26 (with a 270-minute floor at the time):
+# tuned on GW4-20, checked on GW21-38,
 # then confirmed in the decision replay (20 starting squads, same squads for
 # every version). On GW21-38 vs FIRST_VERSION: next-gameweek error 1.83 ->
 # 1.79 points, player ranking over 3 gameweeks 0.50 -> 0.55. Replay: +22

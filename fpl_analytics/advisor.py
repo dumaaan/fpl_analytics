@@ -16,6 +16,7 @@ from fpl_analytics.config import (
     MAX_FREE_TRANSFERS,
     MAX_PLAYERS_PER_TEAM,
     MIN_GAIN_PER_GW,
+    MIN_MINUTES_FOR_PER_90,
     TRANSFER_HIT_COST,
 )
 
@@ -313,7 +314,7 @@ def player_verdicts(squad: pd.DataFrame, singles: list[TransferPlan], value_col:
             level = max(level, 1)
 
         if player.get(fallback_col, False) or pd.isna(player[value_col]):
-            reasons.append("Under 270 minutes: rated with FPL's own expected points")
+            reasons.append(f"Under {MIN_MINUTES_FOR_PER_90} minutes: rated with FPL's own expected points")
             level = max(level, 1)
         elif pd.notna(player["start_rate"]) and player["start_rate"] < 0.5:
             reasons.append(f"Starts only {player['start_rate']:.0%} of matches")
@@ -344,3 +345,68 @@ def player_verdicts(squad: pd.DataFrame, singles: list[TransferPlan], value_col:
                      else "Starter" if player["id"] in lineup.starters else "Bench"),
         })
     return squad.merge(pd.DataFrame(rows), on="id", how="left")
+
+
+# --- Transfers already made ----------------------------------------------------
+
+@dataclass(frozen=True)
+class MadeTransfer:
+    out_id: int
+    in_id: int
+
+
+def apply_transfers(squad: pd.DataFrame, players: pd.DataFrame, bank: int,
+                    transfers: list[MadeTransfer]) -> tuple[pd.DataFrame, int, list[str]]:
+    """Apply transfers the manager already made, in order.
+
+    Incoming players cost their current price, which is also their selling
+    price. Returns (new squad, bank after, problems). A problem means FPL
+    would not allow the transfers, so the caller should not use the result.
+    """
+    by_id = players.set_index("id")
+    new = squad.copy()
+    problems: list[str] = []
+    for transfer in transfers:
+        if transfer.out_id not in set(new["id"]) or transfer.in_id not in by_id.index:
+            problems.append("A transfer uses a player who is not in the squad or not in the data.")
+            continue
+        out_row = new[new["id"] == transfer.out_id].iloc[0]
+        incoming = by_id.loc[transfer.in_id]
+        if transfer.in_id in set(new["id"]):
+            problems.append(f"{incoming['web_name']} is already in the squad.")
+            continue
+        if incoming["position"] != out_row["position"]:
+            problems.append(f"{out_row['web_name']} is a {out_row['position']} and {incoming['web_name']} is a "
+                            f"{incoming['position']}. A transfer must keep the position.")
+            continue
+        row = incoming.to_dict() | {
+            "id": transfer.in_id,
+            "now_cost": int(incoming["now_cost"]),
+            "purchase_cost": int(incoming["now_cost"]),
+            "sell_cost": int(incoming["now_cost"]),
+            "pick_order": out_row.get("pick_order"),
+            "was_captain": False,
+        }
+        bank += int(out_row["sell_cost"]) - int(incoming["now_cost"])
+        new = pd.concat([new[new["id"] != transfer.out_id], pd.DataFrame([row])], ignore_index=True)
+
+    if bank < 0:
+        problems.append(f"These transfers cost £{-bank / 10:.1f}m more than the bank and selling prices allow. "
+                        "Prices may have changed since the last data refresh.")
+    counts = new["team"].value_counts()
+    for team, count in counts[counts > MAX_PLAYERS_PER_TEAM].items():
+        short = new.loc[new["team"] == team, "team_short"].iloc[0] if "team_short" in new else team
+        problems.append(f"The squad would have {count} players from {short}. The limit is {MAX_PLAYERS_PER_TEAM}.")
+    return new.sort_values("pick_order").reset_index(drop=True), bank, problems
+
+
+def transfer_hit(n_transfers: int, free_transfers: int) -> int:
+    return max(0, n_transfers - free_transfers) * TRANSFER_HIT_COST
+
+
+def squad_change(before: pd.DataFrame, after: pd.DataFrame, value_col: str, hit: int) -> dict:
+    """Best-lineup projected points before and after, and the net change after the hit."""
+    score_before = best_lineup(_members(before, value_col)).score
+    score_after = best_lineup(_members(after, value_col)).score
+    change = score_after - score_before
+    return {"before": score_before, "after": score_after, "change": change, "hit": hit, "net": change - hit}

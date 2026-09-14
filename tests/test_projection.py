@@ -48,7 +48,7 @@ def test_shrinkage_pulls_small_samples_harder_than_large_ones():
 
 
 def test_rates_stay_empty_below_the_minutes_floor():
-    history = _history(1, [90, 90], [0.5, 0.5])
+    history = _history(1, [90, 60], [0.5, 0.5])  # 150 minutes, below the 180 floor
     inputs = model_inputs(history, pd.Series({1: "FWD"}), SCORING)
     assert np.isnan(inputs.loc[1, "xg90"])
     assert inputs.loc[1, "p60"] == pytest.approx(1.0)  # the minutes model still works

@@ -85,6 +85,7 @@ Install [Poetry](https://python-poetry.org/docs/#installation) once, if you do n
   - a Keep / Watch / Sell rating for each squad player, with the reasons;
   - the best affordable replacements for any player you pick;
   - the best lineup, captain and bench order for the next gameweek.
+  - **Transfers you already made:** FPL keeps transfers private until the next deadline. Add each one (player sold → player bought) to check that it is legal (budget, position, 3 per club), see the change in projected points over the next 1, 3 and 5 gameweeks after any hit, and compare it with the best move the advisor finds from your old squad. The rest of the page then plans from the new squad, bank and remaining free transfers. The transfers are kept in the page address (`&made=<out>-<in>`).
 
   Plan for the next 1, 3 or 5 gameweeks. Selling prices follow FPL's rule (you keep half of a rise). Free transfers are estimated from your history; you can correct the number. The squad is the one at the last deadline: FPL keeps later transfers private until the next deadline.
 - **Goalkeepers, Defenders, Midfielders, Forwards** — one page per position, with the same layout:
@@ -99,7 +100,7 @@ The sidebar filters (price range, minimum minutes, teams, available only) apply 
 ## Metrics
 
 - **Scoring** comes from the API (`game_config.scoring`), so the metrics follow rule changes. The pipeline rebuilds every player's points from these rules and prints a warning if any match does not add up.
-- **Per-90 rates** are empty below 270 minutes. Small samples show as missing, not as 0.
+- **Per-90 rates** are empty below 180 minutes (2 full matches). Small samples show as missing, not as 0. The floor was 270; it is lower early in the season because the model pulls small samples toward the position average, and the backtest showed good accuracy for players with 180–269 minutes.
 - **VAPM** (Value Added per Million) is points above the appearance points, per game played, divided by price.
 - **DefCon rate** is shrunk toward the position average for small samples: `(hits + 4 × position rate) / (games + 4)`.
 - **Fixture model** — each team's attack and defence is its xG for and against per game, shrunk toward a prior from FPL fixture difficulty. Projected goals for a fixture = league average × team attack × opponent defence, with a 10% home advantage. Clean-sheet chance = `exp(−projected goals against)`.
@@ -114,7 +115,7 @@ The sidebar filters (price range, minimum minutes, teams, available only) apply 
 - Each squad is scored by its **best legal lineup**: the 11 starters' projected points, plus the captain again, plus 10% of the bench. So a swap between two bench players gains almost nothing.
 - For every squad player, the advisor tries the strongest affordable players in the same position (budget = bank + selling price, 3-per-club rule, 75%+ chance to play). Pairs of transfers are tried among the best single moves.
 - Each transfer beyond your free transfers costs 4 points. A move is recommended only if it gains at least 0.5 projected points per gameweek of the plan after hits. A second transfer must add that much again on top of the best single move.
-- **Sell** means unlikely to play, or a replacement clearly scores more. **Watch** means a doubt, few starts, no projection yet (under 270 minutes), a price fall tonight, or a smaller upgrade.
+- **Sell** means unlikely to play, or a replacement clearly scores more. **Watch** means a doubt, few starts, no projection yet (under 180 minutes), a price fall tonight, or a smaller upgrade.
 
 The logic is in `fpl_analytics/advisor.py`, with tests in `tests/test_advisor.py`.
 
