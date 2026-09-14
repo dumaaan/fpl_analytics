@@ -10,6 +10,7 @@ navigation = st.navigation(
     {
         "This week": [
             st.Page("views/home.py", title="Gameweek", icon=":material/today:", default=True),
+            st.Page("views/my_team.py", title="My team", icon=":material/groups:", url_path="my-team"),
         ],
         "Positions": [
             st.Page(positions.goalkeepers, title="Goalkeepers", icon=":material/sports_handball:",

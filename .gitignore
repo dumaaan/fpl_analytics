@@ -15,3 +15,7 @@ data/raw/*.json
 
 # streamlit
 .streamlit/secrets.toml
+
+# third-party datasets (personal use only, never commit)
+data/external/
+data/backtest/
