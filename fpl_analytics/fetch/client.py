@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 
 import requests
 
-from fpl_analytics.config import RAW_DIR
+from fpl_analytics.config import RAW_DIR, RAW_SNAPSHOTS_TO_KEEP
 
 _session = requests.Session()
 
@@ -31,3 +31,14 @@ def save_raw_json(name: str, data: dict | list) -> None:
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     path = RAW_DIR / f"{stamp}_{name}.json"
     path.write_text(json.dumps(data))
+
+
+def prune_raw_snapshots(keep: int = RAW_SNAPSHOTS_TO_KEEP) -> None:
+    """Keep only the newest `keep` snapshots of each response type."""
+    by_name: dict[str, list] = {}
+    for path in RAW_DIR.glob("*_*.json"):
+        name = path.stem.split("_", 1)[1]
+        by_name.setdefault(name, []).append(path)
+    for paths in by_name.values():
+        for old in sorted(paths, reverse=True)[keep:]:
+            old.unlink()

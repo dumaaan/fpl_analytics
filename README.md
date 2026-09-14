@@ -10,23 +10,33 @@ A local Fantasy Premier League analytics tool. It has two parts: a data pipeline
 - **Streamlit** for the dashboard.
 - **Altair** for the charts.
 - **pandas** for all data transforms.
+- **pytest** for the metric tests.
 
-The tool runs on your machine only. It does not need the internet after a data refresh, except to load the FPL API during that refresh.
+The tool runs on your machine only. It needs the internet only during a data refresh, to load the FPL API.
 
 ## Project layout
 
 ```
 fpl_analytics/          # the pipeline package
-  fetch/                 # calls to the FPL API
-  transform/             # raw data -> clean tables -> derived metrics
+  fetch/                 # calls to the FPL API, raw snapshots
+  transform/
+    staging.py           # raw JSON -> clean tables
+    scoring.py           # FPL scoring rules, points split by source
+    teams.py             # team xG, team ratings, fixture model
+    marts.py             # every player metric
+    metrics.py           # per-90, safe divide, shrunk rates
   db.py                  # DuckDB helpers
   pipeline.py            # runs fetch -> transform -> load, in order
 
 dashboard/               # the Streamlit app
-  app.py                 # main page: Overview
-  pages/                 # Positions, Player Detail, Fixtures
+  app.py                 # entry point: navigation and sidebar filters
+  views/                 # Gameweek, position pages, Player detail, Fixture planner
+  catalog.py             # label, help text and format for every metric
   charts.py              # shared chart-building code
+  common.py              # filters, percentiles, table helpers
   queries.py             # shared DuckDB read code
+
+tests/                   # unit tests for the metric formulas
 
 data/                    # gitignored: the DuckDB file and raw API snapshots
 ```
@@ -47,7 +57,7 @@ Install [Poetry](https://python-poetry.org/docs/#installation) once, if you do n
    poetry run fpl-pipeline
    ```
 
-   This step calls the FPL API once per player (about 700-800 calls), so it takes a few minutes. Run it again any time you want fresh data — for example, before or after a gameweek.
+   This step calls the FPL API once per player (about 700-800 calls), so it takes a few minutes. Run it again any time you want fresh data, for example before a deadline. You can keep the dashboard open: the pipeline builds a new file and swaps it in at the end, and the dashboard loads the new data on its next page load. The pipeline keeps the 3 newest raw snapshots of each API response.
 
 3. Run the dashboard:
 
@@ -55,22 +65,43 @@ Install [Poetry](https://python-poetry.org/docs/#installation) once, if you do n
    poetry run fpl-dashboard
    ```
 
-No `source .venv/bin/activate` step is needed — `poetry run` finds the right environment on its own. If you prefer an activated shell, `poetry shell` also works, and then the plain commands (`python -m fpl_analytics.pipeline`, `streamlit run dashboard/app.py`) work too.
+4. Run the tests:
+
+   ```bash
+   poetry run pytest
+   ```
 
 ## Dashboard pages
 
-- **Overview** — filters (position, price, points, minutes) and 8 charts: value, performance vs expectation, form, goalkeepers, differentials, bonus points, overall contribution, and risk. Plus a CSV export button.
-- **Positions** — top-10 leaderboards per position, with a percentile bar per player. Plus a "Market Movers" section: biggest price risers/fallers and biggest transfers in/out.
-- **Player Detail** — pick one player, then see 6 trend charts across the season: points, minutes, goals vs expected goals, ICT index, price, and ownership.
-- **Fixtures** — a difficulty ticker: each team's next 5 fixtures, colored by difficulty.
+- **Gameweek** — the next deadline, last gameweek's average and top score, the best picks for each position by projected points, tonight's likely price changes, and the most transferred players.
+- **Goalkeepers, Defenders, Midfielders, Forwards** — one page per position, with the same layout:
+  - 4 headline cards: best value, top projected points, easiest 5-gameweek run, and closest to a price rise.
+  - One sortable table with columns for that position (for example DefCon rate and near misses for defenders, xG share and haul rate for midfielders). Every column header has a help tooltip. Select a row to open the player page.
+  - A position chart with median lines and labels, and a chart of where each player's points come from.
+- **Player detail** — a percentile profile against the position, the next 5 fixtures, points per gameweek split by source, minutes, cumulative goals vs xG and assists vs xA, price and ownership. Pick a second player to compare the two.
+- **Fixture planner** — each team's next 3, 5 or 8 gameweeks, rated by clean-sheet chance (for GK/DEF), goal threat (for MID/FWD) or FPL difficulty. Double and blank gameweeks show in the right column.
+
+The sidebar filters (price range, minimum minutes, teams, available only) apply on every page.
+
+## Metrics
+
+- **Scoring** comes from the API (`game_config.scoring`), so the metrics follow rule changes. The pipeline rebuilds every player's points from these rules and prints a warning if any match does not add up.
+- **Per-90 rates** are empty below 270 minutes. Small samples show as missing, not as 0.
+- **VAPM** (Value Added per Million) is points above the appearance points, per game played, divided by price.
+- **DefCon rate** is shrunk toward the position average for small samples: `(hits + 4 × position rate) / (games + 4)`.
+- **Fixture model** — each team's attack and defence is its xG for and against per game, shrunk toward a prior from FPL fixture difficulty. Projected goals for a fixture = league average × team attack × opponent defence, with a 10% home advantage. Clean-sheet chance = `exp(−projected goals against)`.
+- **xPts** (expected points) combine a player's per-90 xG, xA, xG conceded, saves, DefCon rate, bonus and cards with the scoring for the position. **xPts next GW** also uses the fixture model, start rate and chance of playing. The window starts at the gameweek of the next deadline.
 
 ## Data model
 
-The pipeline writes 4 tables into `data/fpl.duckdb`:
+The pipeline writes these tables into `data/fpl.duckdb`:
 
-- `stg_teams` — team identity and strength ratings.
-- `stg_fixtures` — every match this season, with difficulty ratings.
-- `stg_player_gameweek_history` — one row per player per gameweek played. This powers the trend charts.
-- `mart_players` — one row per player: identity, season totals, and every derived metric (value added, per-90 stats, consistency score, and so on).
+- `stg_teams`, `stg_fixtures`, `stg_events` — teams, every match this season, and every gameweek (deadline, average score, most captained, chip plays).
+- `mart_player_gameweeks` — one row per player per team match, with the team played for, points split by source, and DefCon flags.
+- `mart_team_fixture_results` — team xG and goals for each finished match.
+- `mart_team_ratings` — each team's attack and defence rating.
+- `mart_team_fixtures` — each team's upcoming matches with projected goals, clean-sheet chance and 1-5 ease ratings.
+- `mart_players` — one row per player: identity, season totals, and every derived metric.
+- `data_refresh_log` — one row per pipeline run.
 
-Each pipeline run replaces these tables in full — the FPL API returns full current-state data each time, not just changes, so there is no merge step.
+Each pipeline run replaces these tables in full. The FPL API returns full current-state data each time, not just changes, so there is no merge step.

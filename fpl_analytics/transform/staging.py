@@ -1,3 +1,4 @@
+import numpy as np
 import pandas as pd
 
 from fpl_analytics.config import POSITION_BY_ELEMENT_TYPE
@@ -27,6 +28,26 @@ FIXTURE_COLUMNS = [
     "team_h_score",
     "team_a_score",
 ]
+
+EVENT_COLUMNS = [
+    "id",
+    "name",
+    "deadline_time",
+    "finished",
+    "is_previous",
+    "is_current",
+    "is_next",
+    "average_entry_score",
+    "highest_score",
+    "most_captained",
+    "most_vice_captained",
+    "most_selected",
+    "most_transferred_in",
+    "top_element",
+    "transfers_made",
+]
+
+CHIP_NAMES = ["wildcard", "freehit", "bboost", "3xc"]
 
 PLAYER_RAW_NUMERIC_STRING_COLUMNS = [
     "points_per_game",
@@ -93,6 +114,22 @@ PLAYER_RAW_COLUMNS = [
     *PLAYER_RAW_NUMERIC_STRING_COLUMNS,
 ]
 
+# Newer or less stable bootstrap fields. Missing ones load as empty instead of
+# failing the whole pipeline.
+PLAYER_OPTIONAL_COLUMNS = [
+    "expected_goals_per_90",
+    "expected_assists_per_90",
+    "expected_goal_involvements_per_90",
+    "expected_goals_conceded_per_90",
+    "saves_per_90",
+    "goals_conceded_per_90",
+    "penalties_order",
+    "corners_and_indirect_freekicks_order",
+    "direct_freekicks_order",
+    "price_change_percent",
+    "price_change_projections",
+]
+
 HISTORY_NUMERIC_STRING_COLUMNS = [
     "influence",
     "creativity",
@@ -113,6 +150,7 @@ HISTORY_COLUMNS = [
     "kickoff_time",
     "total_points",
     "minutes",
+    "starts",
     "goals_scored",
     "assists",
     "clean_sheets",
@@ -129,6 +167,7 @@ HISTORY_COLUMNS = [
     "selected",
     "transfers_in",
     "transfers_out",
+    "transfers_balance",
     "defensive_contribution",
     "clearances_blocks_interceptions",
     "recoveries",
@@ -138,27 +177,76 @@ HISTORY_COLUMNS = [
 
 
 def build_teams_df(bootstrap_data: dict) -> pd.DataFrame:
-    df = pd.DataFrame(bootstrap_data["teams"])[TEAM_COLUMNS]
-    return df.rename(columns={"name": "name", "short_name": "short_name"})
+    return pd.DataFrame(bootstrap_data["teams"])[TEAM_COLUMNS]
+
+
+def build_events_df(bootstrap_data: dict) -> pd.DataFrame:
+    events = bootstrap_data["events"]
+    df = pd.DataFrame(events).reindex(columns=EVENT_COLUMNS)
+    df["deadline_time"] = pd.to_datetime(df["deadline_time"], utc=True, errors="coerce")
+    for chip in CHIP_NAMES:
+        df[f"chip_{chip}"] = [
+            next((c["num_played"] for c in (e.get("chip_plays") or []) if c["chip_name"] == chip), 0)
+            for e in events
+        ]
+    return df
+
+
+def next_event_id(events: pd.DataFrame) -> int | None:
+    """Gameweek of the next transfer deadline, or None after the season ends."""
+    upcoming = events[events["is_next"].astype(bool)]
+    return int(upcoming.iloc[0]["id"]) if not upcoming.empty else None
+
+
+def _tonight_projection(projections: object) -> tuple[float, float]:
+    """(projected_percent, likelihood) for tonight's price update. Percent runs
+    -100..+100; +/-100 means the price moves. Likelihood is signed by direction."""
+    if not isinstance(projections, list):
+        return np.nan, np.nan
+    tonight = next((p for p in projections if p.get("offset") == 0), None)
+    if tonight is None:
+        return np.nan, np.nan
+    return pd.to_numeric(tonight.get("projected_percent"), errors="coerce"), tonight.get("likelihood", np.nan)
 
 
 def build_players_raw_df(bootstrap_data: dict) -> pd.DataFrame:
-    df = pd.DataFrame(bootstrap_data["elements"])[PLAYER_RAW_COLUMNS].copy()
+    elements = pd.DataFrame(bootstrap_data["elements"])
+    df = elements[PLAYER_RAW_COLUMNS].copy()
+    optional = elements.reindex(columns=PLAYER_OPTIONAL_COLUMNS)
+    df = pd.concat([df, optional], axis=1)
+
     for col in PLAYER_RAW_NUMERIC_STRING_COLUMNS:
         df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0.0)
+    for col in [
+        "expected_goals_per_90",
+        "expected_assists_per_90",
+        "expected_goal_involvements_per_90",
+        "expected_goals_conceded_per_90",
+        "saves_per_90",
+        "goals_conceded_per_90",
+        "price_change_percent",
+        "penalties_order",
+        "corners_and_indirect_freekicks_order",
+        "direct_freekicks_order",
+        "chance_of_playing_next_round",
+        "chance_of_playing_this_round",
+    ]:
+        df[col] = pd.to_numeric(df[col], errors="coerce")
+
+    projections = df["price_change_projections"].map(_tonight_projection)
+    df["price_change_tonight_pct"] = [p[0] for p in projections]
+    df["price_change_likelihood"] = [p[1] for p in projections]
+    df = df.drop(columns=["price_change_projections"])
+
     df["position"] = df["element_type"].map(POSITION_BY_ELEMENT_TYPE).fillna("Unknown")
-    df["chance_of_playing_next_round"] = pd.to_numeric(
-        df["chance_of_playing_next_round"], errors="coerce"
-    )
-    df["chance_of_playing_this_round"] = pd.to_numeric(
-        df["chance_of_playing_this_round"], errors="coerce"
-    )
+    df["news"] = df["news"].fillna("")
     return df
 
 
 def build_fixtures_df(fixtures_data: list[dict]) -> pd.DataFrame:
     df = pd.DataFrame(fixtures_data)[FIXTURE_COLUMNS].copy()
     df["kickoff_time"] = pd.to_datetime(df["kickoff_time"], utc=True, errors="coerce")
+    df["event"] = pd.to_numeric(df["event"], errors="coerce").astype("Int64")
     return df
 
 
@@ -171,9 +259,12 @@ def build_player_gameweek_history_df(history_by_player: dict[int, list[dict]]) -
             rows.append(row)
 
     if not rows:
-        return pd.DataFrame(columns=["player_id", *HISTORY_COLUMNS])
+        df = pd.DataFrame(columns=["player_id", *HISTORY_COLUMNS, "price"])
+        return df.drop(columns=["value", "element"]).rename(
+            columns={"fixture": "fixture_id", "opponent_team": "opponent_team_id"}
+        )
 
-    df = pd.DataFrame(rows)[["player_id", *HISTORY_COLUMNS]].copy()
+    df = pd.DataFrame(rows).reindex(columns=["player_id", *HISTORY_COLUMNS]).copy()
     for col in HISTORY_NUMERIC_STRING_COLUMNS:
         df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0.0)
     df["kickoff_time"] = pd.to_datetime(df["kickoff_time"], utc=True, errors="coerce")
