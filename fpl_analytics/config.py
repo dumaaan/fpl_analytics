@@ -3,6 +3,9 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = PROJECT_ROOT / "data"
 RAW_DIR = DATA_DIR / "raw"
+# Third-party datasets, e.g. past seasons for the backtest (gitignored).
+EXTERNAL_DIR = DATA_DIR / "external"
+BACKTEST_DIR = DATA_DIR / "backtest"
 DB_PATH = DATA_DIR / "fpl.duckdb"
 # The pipeline builds into this file, then renames it over DB_PATH, so an
 # open dashboard never blocks a refresh and never sees a half-written database.
@@ -12,6 +15,10 @@ FPL_BASE_URL = "https://fantasy.premierleague.com/api"
 BOOTSTRAP_STATIC_URL = f"{FPL_BASE_URL}/bootstrap-static/"
 FIXTURES_URL = f"{FPL_BASE_URL}/fixtures/"
 ELEMENT_SUMMARY_URL = f"{FPL_BASE_URL}/element-summary/{{player_id}}/"
+ENTRY_URL = f"{FPL_BASE_URL}/entry/{{team_id}}/"
+ENTRY_PICKS_URL = f"{FPL_BASE_URL}/entry/{{team_id}}/event/{{event}}/picks/"
+ENTRY_TRANSFERS_URL = f"{FPL_BASE_URL}/entry/{{team_id}}/transfers/"
+ENTRY_HISTORY_URL = f"{FPL_BASE_URL}/entry/{{team_id}}/history/"
 
 POSITION_BY_ELEMENT_TYPE = {1: "GK", 2: "DEF", 3: "MID", 4: "FWD"}
 OUTFIELD_POSITIONS = ["DEF", "MID", "FWD"]
@@ -60,3 +67,17 @@ HOME_ADVANTAGE = 1.1
 FIXTURE_HORIZON_GWS = 8
 
 RAW_SNAPSHOTS_TO_KEEP = 3
+
+# Team advisor. Squad rules: 3 players per club at most, 5 saved free
+# transfers at most, 4 points for each extra transfer.
+MAX_PLAYERS_PER_TEAM = 3
+MAX_FREE_TRANSFERS = 5
+TRANSFER_HIT_COST = 4
+# Bench players score only through automatic substitutions, so a bench
+# player's projected points count at this fraction of a starter's.
+BENCH_WEIGHT = 0.1
+# Valid formations as (DEF, MID, FWD); every XI also has 1 goalkeeper.
+FORMATIONS = [(3, 4, 3), (3, 5, 2), (4, 3, 3), (4, 4, 2), (4, 5, 1), (5, 2, 3), (5, 3, 2), (5, 4, 1)]
+# A transfer is worth recommending when it gains at least this many
+# projected points per gameweek in the horizon, after any hit.
+MIN_GAIN_PER_GW = 0.5

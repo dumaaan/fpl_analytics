@@ -23,6 +23,7 @@ _METRICS = [
            "Projected points for the next gameweek. Uses per-90 rates, start rate, availability and "
            "the fixture model. 0 means a blank gameweek. Empty below 270 minutes.", "%.1f"),
     Metric("xpts_next_3gw", "xPts next 3 GW", "Projected points for the next 3 gameweeks.", "%.1f"),
+    Metric("xpts_next_5gw", "xPts next 5 GW", "Projected points for the next 5 gameweeks.", "%.1f"),
     Metric("xpts_per_90", "xPts/90",
            "Expected points per 90 minutes from xG, xA, xG conceded, saves, DefCon rate, bonus and "
            "cards, with this season's scoring for the position."),

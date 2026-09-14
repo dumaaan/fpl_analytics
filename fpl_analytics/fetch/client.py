@@ -10,13 +10,20 @@ _session = requests.Session()
 
 
 def fetch_json(url: str, retries: int = 2, backoff_seconds: float = 1.0) -> dict:
-    """GET a URL as JSON, retrying on failure with linear backoff."""
+    """GET a URL as JSON, retrying on failure with linear backoff. Client
+    errors (4xx, such as an unknown team ID) raise at once: a retry cannot fix them."""
     last_error: Exception | None = None
     for attempt in range(retries + 1):
         try:
             response = _session.get(url, timeout=15)
             response.raise_for_status()
             return response.json()
+        except requests.HTTPError as exc:
+            if exc.response is not None and exc.response.status_code < 500:
+                raise
+            last_error = exc
+            if attempt < retries:
+                time.sleep(backoff_seconds * (attempt + 1))
         except requests.RequestException as exc:
             last_error = exc
             if attempt < retries:

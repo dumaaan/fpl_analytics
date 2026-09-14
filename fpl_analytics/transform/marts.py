@@ -8,9 +8,9 @@ from fpl_analytics.config import (
     OUTFIELD_POSITIONS,
     RECENT_FORM_GWS,
     RECENT_FORM_MIN_MINUTES,
-    SAVES_PER_SAVE_POINT,
 )
 from fpl_analytics.transform.metrics import per_90, safe_divide, shrunk_rate
+from fpl_analytics.transform.projection import model_inputs, project_fixtures, summarize_projections, xpts_per_90
 from fpl_analytics.transform.scoring import POINT_SOURCES, Scoring, add_points_breakdown
 from fpl_analytics.transform.teams import assign_team_ids, next_fixtures_label
 
@@ -102,72 +102,6 @@ def _gameweek_aggregates(player_gameweeks: pd.DataFrame) -> pd.DataFrame:
     )
 
     return all_rows.join(played_agg, how="left").join(recent_agg, how="left")
-
-
-def _fixture_projections(
-    df: pd.DataFrame, upcoming: pd.DataFrame, ratings: pd.DataFrame, scoring: Scoring
-) -> pd.DataFrame:
-    """Expected points for each player's next gameweek and next 3 gameweeks.
-
-    Per fixture: play_prob * (appearance + attack returns scaled by how many
-    goals the team is projected to score vs its average + clean-sheet points
-    at the fixture's clean-sheet chance + goals-conceded deduction at the
-    fixture's projected goals against + saves + DefCon + bonus + cards).
-    """
-    out = pd.DataFrame(index=df.index)
-    for col in ["xpts_next_gw", "xpts_next_3gw", "xg_next_3gw", "cs_expected_next_gw", "fixtures_next_gw"]:
-        out[col] = np.nan
-    if upcoming.empty:
-        return out
-
-    first_event = int(upcoming["window_start"].iloc[0])
-    team_xg_pg = ratings.set_index("team_id")["xg_per_game"]
-    fx = upcoming[upcoming["event"] < first_event + 3][
-        ["team_id", "event", "xg_for", "xg_against", "cs_prob"]
-    ].copy()
-    fx["attack_mult"] = fx["xg_for"] / fx["team_id"].map(team_xg_pg)
-
-    p = df.reset_index()[[
-        "index", "team", "position", "play_prob", "xg90", "xa90", "saves90", "bonus90", "cards90",
-        "defcon_rate_for_xpts",
-    ]]
-    m = p.merge(fx, left_on="team", right_on="team_id", how="left")
-
-    pos = m["position"]
-    goal_w = scoring.by_position("goals_scored", pos)
-    cs_w = scoring.by_position("clean_sheets", pos)
-    gc_w = scoring.by_position("goals_conceded", pos)
-    defcon_w = scoring.by_position("defensive_contribution", pos)
-
-    m["xpts"] = m["play_prob"] * (
-        scoring.value("long_play", "")
-        + (goal_w * m["xg90"] + scoring.value("assists", "") * m["xa90"]) * m["attack_mult"]
-        + cs_w * m["cs_prob"]
-        + gc_w * m["xg_against"] / 2
-        + m["saves90"] / SAVES_PER_SAVE_POINT * scoring.value("saves", "")
-        + defcon_w * m["defcon_rate_for_xpts"]
-        + m["bonus90"]
-        + m["cards90"]
-    )
-    m["xg_fixture"] = m["play_prob"] * m["xg90"] * m["attack_mult"]
-
-    next_gw = m[m["event"] == first_event]
-    has_fixture = m["event"].notna()
-    grouped_3 = m[has_fixture].groupby("index")
-    grouped_1 = next_gw.groupby("index")
-
-    out["xpts_next_3gw"] = grouped_3["xpts"].sum(min_count=1)
-    out["xg_next_3gw"] = grouped_3["xg_fixture"].sum(min_count=1)
-    out["xpts_next_gw"] = grouped_1["xpts"].sum(min_count=1)
-    out["cs_expected_next_gw"] = grouped_1["cs_prob"].sum(min_count=1)
-    out["fixtures_next_gw"] = grouped_1["event"].size()
-
-    # A blank gameweek is a real 0, but only for players we can project at all.
-    projectable = df["xg90"].notna()
-    for col in ["xpts_next_gw", "cs_expected_next_gw", "fixtures_next_gw"]:
-        out.loc[projectable & out[col].isna(), col] = 0.0
-    out.loc[~projectable, ["xpts_next_gw", "xpts_next_3gw", "xg_next_3gw"]] = np.nan
-    return out
 
 
 def build_mart_players(
@@ -289,38 +223,21 @@ def build_mart_players(
     df["defcon_points_per_90"] = per_90(df["pts_defcon"], minutes).where(outfield)
     df["save_points_per_90"] = per_90(df["pts_saves"], minutes).where(df["position"] == "GK")
 
-    # --- Expected points per 90 (season) ---------------------------------
+    # --- Expected points: the shared model in transform/projection.py -------
     df = df.copy()
-    pos = df["position"]
-    xgc90 = df["expected_goals_conceded_per_90"]
-    df["xg90"] = df["xg_per_90"]
-    df["xa90"] = df["xa_per_90"]
-    df["saves90"] = df["saves_per_90"].where(pos == "GK", 0.0)
-    df["bonus90"] = df["bonus_per_90"]
-    df["cards90"] = df["card_points_per_90"]
-    df["defcon_rate_for_xpts"] = df["defcon_hit_rate_adj"].fillna(0.0)
-    df["xpts_per_90"] = (
-        scoring.value("long_play", "")
-        + scoring.by_position("goals_scored", pos) * df["xg90"]
-        + scoring.value("assists", "") * df["xa90"]
-        + scoring.by_position("clean_sheets", pos) * np.exp(-xgc90)
-        + scoring.by_position("goals_conceded", pos) * xgc90 / 2
-        + df["saves90"] / SAVES_PER_SAVE_POINT * scoring.value("saves", "")
-        + scoring.by_position("defensive_contribution", pos) * df["defcon_rate_for_xpts"]
-        + df["bonus90"]
-        + df["cards90"]
-    )
+    by_id = df.set_index("id")
+    inputs = model_inputs(player_gameweeks, by_id["position"], scoring, prices=by_id["price"])
+    df["xpts_per_90"] = df["id"].map(xpts_per_90(inputs, scoring))
     df["luck_per_90"] = df["points_per_90"] - df["xpts_per_90"]
-
-    # --- Fixture-adjusted projections ------------------------------------
     df["play_prob"] = df["start_rate"].fillna(0.0) * df["availability"]
-    projections = _fixture_projections(df, upcoming_fixtures, team_ratings, scoring)
-    df = df.join(projections)
+    first_event = int(upcoming_fixtures["window_start"].iloc[0]) if not upcoming_fixtures.empty else None
+    per_fixture = project_fixtures(inputs, by_id["team"], by_id["availability"], upcoming_fixtures, team_ratings,
+                                   scoring)
+    df = df.join(summarize_projections(per_fixture, inputs, first_event), on="id")
 
     if not upcoming_fixtures.empty:
         df["next_fixtures"] = df["team"].map(next_fixtures_label(upcoming_fixtures)).fillna("")
     else:
         df["next_fixtures"] = ""
 
-    return df.drop(columns=["xg90", "xa90", "saves90", "bonus90", "cards90", "defcon_rate_for_xpts",
-                            "avg_non_appearance_points", "price_last"])
+    return df.drop(columns=["avg_non_appearance_points", "price_last"])
