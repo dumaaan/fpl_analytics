@@ -11,7 +11,7 @@ packages = [
 
 [tool.poetry.dependencies]
 python = "^3.11"
-duckdb = ">=1.0.0"
+duckdb = "^2.0"  # pinned to one major: the storage format must match everywhere
 pandas = ">=2.2.0"
 numpy = ">=1.26.0"
 requests = ">=2.32.0"

@@ -80,3 +80,35 @@ def test_plist_runs_the_venv_script_daily_with_absolute_paths():
     assert plist["StartCalendarInterval"] == {"Hour": 18, "Minute": 30}
     assert Path(plist["WorkingDirectory"]).is_absolute()
     assert plist["RunAtLoad"] is False
+
+
+def test_ensure_database_force_skips_the_age_check(tmp_path, monkeypatch):
+    """A cached copy older than the code must be replaced at once, not after the TTL."""
+    import fpl_analytics.datasource as ds
+
+    monkeypatch.setattr(ds, "DATA_DIR", tmp_path)
+    monkeypatch.setattr(ds, "DB_PATH", tmp_path / "fpl.duckdb")
+    monkeypatch.setattr(ds, "SOURCE_STATE_PATH", tmp_path / ".db_source.json")
+    (tmp_path / "fpl.duckdb").write_bytes(b"old")
+    ds._write_state({"etag": "same",
+                     "checked_at": datetime.now(timezone.utc).isoformat()})
+
+    class FakeHTTP:
+        def __init__(self):
+            self.gets = 0
+
+        def head(self, *a, **k):
+            raise AssertionError("force must not ask the ETag question")
+
+        def get(self, *a, **k):
+            self.gets += 1
+            return type("R", (), {"ok": True, "headers": {"ETag": "new"},
+                                  "raise_for_status": lambda self: None,
+                                  "iter_content": lambda self, chunk_size: [b"new"]})()
+
+    http = FakeHTTP()
+    assert ds.ensure_database(url="https://example.test/fpl.duckdb", session=http) == "fresh"
+    assert http.gets == 0
+    assert ds.ensure_database(url="https://example.test/fpl.duckdb", session=http, force=True) == "downloaded"
+    assert http.gets == 1
+    assert (tmp_path / "fpl.duckdb").read_bytes() == b"new"

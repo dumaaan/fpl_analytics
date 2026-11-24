@@ -28,12 +28,47 @@ def format_utc(timestamp: object, fmt: str) -> str:
     return ts.strftime(fmt)
 
 
+# Columns every page needs. The app's code and its data are deployed
+# separately — the code from the repository, the data from a published
+# release — so a new column can reach the code first. When that happens the
+# pages must say so, not raise a KeyError halfway down.
+REQUIRED_COLUMNS = ["points_per_match", "next_fixtures", "position", "price", "team_short"]
+
+
 def load_players_or_stop() -> pd.DataFrame:
     players = get_all_players()
     if players.empty:
         st.warning(NO_DATA_MESSAGE)
         st.stop()
+
+    missing = [c for c in REQUIRED_COLUMNS if c not in players.columns]
+    if missing:
+        players = _refresh_stale_data(missing)
     return players
+
+
+def _refresh_stale_data(missing: list[str]) -> pd.DataFrame:
+    """Fetch the published data again, once, then give up with a clear message."""
+    from fpl_analytics.datasource import database_url, ensure_database
+
+    if database_url() and not st.session_state.get("_stale_retry"):
+        st.session_state["_stale_retry"] = True
+        if ensure_database(force=True) == "downloaded":
+            st.cache_data.clear()
+            st.rerun()
+
+    if database_url():
+        st.warning(
+            "The published data is older than this app, so some pages cannot be drawn yet. "
+            "The next scheduled refresh will fix it, usually within the hour. "
+            f"Missing: {', '.join(missing)}."
+        )
+    else:
+        st.warning(
+            "The data file is older than this app. Run `poetry run fpl-pipeline` to rebuild it. "
+            f"Missing: {', '.join(missing)}."
+        )
+    st.stop()
 
 
 def render_sidebar_filters(players: pd.DataFrame) -> None:

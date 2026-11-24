@@ -59,13 +59,16 @@ def _age_seconds(state: dict) -> float:
 
 
 def ensure_database(url: str | None = None, ttl_seconds: float = DOWNLOAD_TTL_SECONDS,
-                    session: requests.Session | None = None) -> str:
+                    session: requests.Session | None = None, force: bool = False) -> str:
     """Make sure `DB_PATH` holds the newest published database.
 
     Returns what happened: "local" (no URL set), "fresh" (the copy on disk is
     recent enough), "unchanged" (the server has the same file), "downloaded",
     or "failed" (kept any existing copy). Downloads are atomic, so a reader
     never sees a half-written file.
+
+    `force` skips both the age check and the ETag check. The app uses it when
+    the copy on disk is older than the code and has to be replaced now.
     """
     url = url or database_url()
     if not url:
@@ -73,13 +76,13 @@ def ensure_database(url: str | None = None, ttl_seconds: float = DOWNLOAD_TTL_SE
 
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     state = _read_state()
-    if DB_PATH.exists() and _age_seconds(state) < ttl_seconds:
+    if not force and DB_PATH.exists() and _age_seconds(state) < ttl_seconds:
         return "fresh"
 
     http = session or requests
     headers = {"User-Agent": "fpl-analytics"}
     try:
-        if DB_PATH.exists() and state.get("etag"):
+        if not force and DB_PATH.exists() and state.get("etag"):
             head = http.head(url, headers=headers, timeout=DOWNLOAD_TIMEOUT_SECONDS, allow_redirects=True)
             if head.ok and head.headers.get("ETag") == state["etag"]:
                 _write_state({**state, "checked_at": datetime.now(timezone.utc).isoformat()})
