@@ -4,6 +4,7 @@ import streamlit as st
 from dashboard.catalog import METRICS
 from dashboard.queries import get_all_players, get_last_refresh
 from fpl_analytics.config import MIN_MINUTES_FOR_PER_90
+from fpl_analytics.refresh import is_stale, read_last_run
 
 POSITIONS = ["GK", "DEF", "MID", "FWD"]
 NO_DATA_MESSAGE = "No data yet. Run `poetry run fpl-pipeline`, then reload this page."
@@ -62,6 +63,30 @@ def render_sidebar_filters(players: pd.DataFrame) -> None:
     last_refresh = get_last_refresh()
     if last_refresh is not None:
         st.sidebar.caption(f"Data updated {format_utc(last_refresh, '%d %b %Y, %H:%M UTC')}")
+    render_refresh_warnings(last_refresh)
+
+
+def render_refresh_warnings(last_refresh) -> None:
+    """Warn when the daily refresh failed or has not run, so stale data is never silent."""
+    last_success = None
+    if last_refresh is not None:
+        last_success = pd.Timestamp(last_refresh)
+        last_success = last_success.tz_localize("UTC") if last_success.tzinfo is None else last_success.tz_convert("UTC")
+    last_run = read_last_run()
+    if last_run and last_run.get("status") == "failed" and last_run.get("finished"):
+        finished = pd.Timestamp(last_run["finished"])
+        if last_success is None or finished > last_success:
+            st.sidebar.error(
+                f"The last data refresh failed ({format_utc(finished, '%d %b, %H:%M UTC')}): {last_run['error']} "
+                "The pages show the previous data. See `poetry run fpl-schedule status`."
+            )
+            return
+    if last_success is not None and is_stale(last_success.to_pydatetime()):
+        hours = (pd.Timestamp.now(tz="UTC") - last_success).total_seconds() / 3600
+        st.sidebar.warning(
+            f"The data is {hours:.0f} hours old. The daily refresh may not have run: check "
+            "`poetry run fpl-schedule status`, or refresh now with `poetry run fpl-pipeline`."
+        )
 
 
 def apply_filters(players: pd.DataFrame, use_minutes: bool = True) -> pd.DataFrame:

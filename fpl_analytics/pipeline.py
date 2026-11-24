@@ -1,9 +1,11 @@
+import fcntl
 import os
+from contextlib import contextmanager
 from datetime import datetime, timezone
 
 import pandas as pd
 
-from fpl_analytics.config import DB_PATH, TMP_DB_PATH
+from fpl_analytics.config import DATA_DIR, DB_PATH, PIPELINE_LOCK_PATH, TMP_DB_PATH
 from fpl_analytics.db import copy_refresh_log, get_connection, load_dataframe
 from fpl_analytics.fetch.bootstrap import fetch_bootstrap_static
 from fpl_analytics.fetch.client import prune_raw_snapshots
@@ -26,7 +28,32 @@ from fpl_analytics.transform.teams import (
 )
 
 
+class PipelineBusy(RuntimeError):
+    """Another pipeline run holds the lock."""
+
+
+@contextmanager
+def pipeline_lock():
+    """Exclusive lock for one pipeline run. Two runs would write the same
+    temporary database file. The lock ends with the process, even on a crash."""
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    with open(PIPELINE_LOCK_PATH, "w") as handle:
+        try:
+            fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            raise PipelineBusy("Another data refresh is running. Wait for it to finish.") from None
+        try:
+            yield
+        finally:
+            fcntl.flock(handle, fcntl.LOCK_UN)
+
+
 def run() -> None:
+    with pipeline_lock():
+        _run()
+
+
+def _run() -> None:
     print("Fetching bootstrap-static (players, teams, gameweeks, scoring)...")
     bootstrap_data = fetch_bootstrap_static()
     scoring = Scoring.from_bootstrap(bootstrap_data)

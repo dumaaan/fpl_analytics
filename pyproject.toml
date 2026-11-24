@@ -22,6 +22,9 @@ altair = ">=5.3.0"
 fpl-pipeline = "fpl_analytics.cli:run_pipeline"
 fpl-dashboard = "fpl_analytics.cli:run_dashboard"
 fpl-backtest = "fpl_analytics.backtest.run:main"
+fpl-refresh = "fpl_analytics.refresh:main"
+fpl-schedule = "fpl_analytics.schedule:main"
+fpl-publish = "fpl_analytics.publish:main"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^9.1.1"

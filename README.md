@@ -28,6 +28,9 @@ fpl_analytics/          # the pipeline package
   db.py                  # DuckDB helpers
   pipeline.py            # runs fetch -> transform -> load, in order
 
+streamlit_app.py         # entry point for Streamlit Community Cloud
+.github/workflows/       # the daily data refresh on GitHub Actions
+
 dashboard/               # the Streamlit app
   app.py                 # entry point: navigation and sidebar filters
   views/                 # Gameweek, position pages, Player detail, Fixture planner
@@ -71,7 +74,13 @@ Install [Poetry](https://python-poetry.org/docs/#installation) once, if you do n
    poetry run fpl-backtest --season 2025-26
    ```
 
-5. Run the tests:
+5. Optional: refresh the data every day on its own (macOS, see [Daily refresh](#daily-refresh)):
+
+   ```bash
+   poetry run fpl-schedule install
+   ```
+
+6. Run the tests:
 
    ```bash
    poetry run pytest
@@ -118,6 +127,80 @@ The sidebar filters (price range, minimum minutes, teams, available only) apply 
 - **Sell** means unlikely to play, or a replacement clearly scores more. **Watch** means a doubt, few starts, no projection yet (under 180 minutes), a price fall tonight, or a smaller upgrade.
 
 The logic is in `fpl_analytics/advisor.py`, with tests in `tests/test_advisor.py`.
+
+## Daily refresh
+
+`poetry run fpl-schedule install` adds a launchd job that runs `fpl-refresh` every day at 18:30 local time (09:30 UTC on a Mac set to Korea time). That time is after FPL's overnight price changes and after gameweek scores are final. Choose another time with `--time HH:MM`.
+
+- **Sleep:** if the Mac is asleep at that time, the job runs when it wakes. A Mac that is switched off skips the day.
+- **Retries:** each run tries up to 3 times, 15 minutes apart, because the network or FPL may not be ready.
+- **No overlap:** a lock stops a scheduled and a manual refresh from running at the same time. The second one exits.
+- **Logs:** one log file per run in `data/logs/` (the newest 30 are kept). `data/logs/last_run.json` holds the last result.
+- **Failures:** macOS shows a notification. The dashboard keeps the previous data and shows an error in the sidebar. If the newest data is older than 36 hours, the sidebar shows a warning.
+
+Other commands:
+
+```bash
+poetry run fpl-schedule status
+```
+
+```bash
+poetry run fpl-schedule run-now
+```
+
+```bash
+poetry run fpl-schedule uninstall
+```
+
+`status` shows the schedule, the last run and its log. `run-now` starts the job the same way launchd does, to test it. `uninstall` removes the job.
+
+## Hosting it online
+
+The dashboard runs on [Streamlit Community Cloud](https://share.streamlit.io), free. The hosted app has no pipeline, so a scheduled GitHub Actions job builds the data and publishes it, and the app downloads it.
+
+```
+GitHub Actions (daily, 09:30 UTC)
+  builds the data  ->  uploads fpl.duckdb to the "data-latest" release
+                                   |
+Streamlit Community Cloud  <--------+  downloads it on start, then every 30 minutes
+```
+
+### One-time setup
+
+1. **Turn on the daily job.** Once `.github/workflows/refresh.yml` is on the default branch, open the repository's **Actions** tab, choose **Refresh FPL data**, and press **Run workflow**. This creates the `data-latest` release and proves the FPL API answers GitHub's servers.
+
+2. **Deploy the app.** Sign in at [share.streamlit.io](https://share.streamlit.io) with GitHub, choose **Create app**, and set:
+
+   | Field | Value |
+   | --- | --- |
+   | Repository | `dumaaan/fpl_analytics` |
+   | Branch | `main` |
+   | Main file path | `streamlit_app.py` |
+   | Python version | 3.12 |
+
+3. **Point the app at the data.** In the app's **Settings → Secrets**, add this line, then save:
+
+   ```toml
+   FPL_DB_URL = "https://github.com/dumaaan/fpl_analytics/releases/download/data-latest/fpl.duckdb"
+   ```
+
+   Without the secret the app starts but shows no data, because it has no database to read.
+
+### How it behaves when hosted
+
+- **Data:** downloaded on start, then re-checked every 30 minutes. An unchanged file is not downloaded again.
+- **Sleeping:** Community Cloud sleeps an app after 12 hours with no visitors. It wakes on the next visit.
+- **Updates:** a push to `main` redeploys the app. A change to `requirements.txt` reinstalls the packages.
+- **My team:** this page calls the FPL API live from Streamlit's servers. If FPL blocks them, that page fails while every other page keeps working, because they read the published database.
+- **Local runs are unchanged:** without `FPL_DB_URL`, the app reads the file the pipeline wrote.
+
+### Publishing data by hand
+
+```bash
+poetry run fpl-publish
+```
+
+Uploads the current database to the `data-latest` release. The launchd job on your Mac can do this too, as a fallback if GitHub Actions ever cannot reach the FPL API.
 
 ## Backtest
 

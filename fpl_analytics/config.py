@@ -3,6 +3,10 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = PROJECT_ROOT / "data"
 RAW_DIR = DATA_DIR / "raw"
+LOG_DIR = DATA_DIR / "logs"
+# Held for the whole pipeline run, so a scheduled and a manual refresh never overlap.
+PIPELINE_LOCK_PATH = DATA_DIR / ".pipeline.lock"
+LAST_RUN_PATH = LOG_DIR / "last_run.json"
 # Third-party datasets, e.g. past seasons for the backtest (gitignored).
 EXTERNAL_DIR = DATA_DIR / "external"
 BACKTEST_DIR = DATA_DIR / "backtest"
@@ -84,3 +88,17 @@ FORMATIONS = [(3, 4, 3), (3, 5, 2), (4, 3, 3), (4, 4, 2), (4, 5, 1), (5, 2, 3), 
 # A transfer is worth recommending when it gains at least this many
 # projected points per gameweek in the horizon, after any hit.
 MIN_GAIN_PER_GW = 0.5
+
+# Daily refresh with launchd (`poetry run fpl-schedule install`). Local time on
+# this Mac: 18:30 KST = 09:30 UTC, after FPL's overnight price changes
+# (about 00:30 UTC) and after gameweek scores are final (9am UK time the day
+# after the last match). A Mac that is asleep at that time runs it on wake.
+SCHEDULE_LABEL = "com.fpl-analytics.refresh"
+REFRESH_HOUR = 18
+REFRESH_MINUTE = 30
+# The Mac may have just woken up (no network yet) or FPL may be busy: try again.
+REFRESH_ATTEMPTS = 3
+REFRESH_RETRY_MINUTES = 15
+REFRESH_LOGS_TO_KEEP = 30
+# The dashboard warns when the newest data is older than this.
+STALE_DATA_HOURS = 36

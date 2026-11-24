@@ -6,7 +6,16 @@ import requests
 
 from fpl_analytics.config import RAW_DIR, RAW_SNAPSHOTS_TO_KEEP
 
+# The FPL API refuses some requests that carry no browser-style User-Agent,
+# which matters when the pipeline runs on a cloud server (GitHub Actions) or
+# the hosted dashboard looks up a team.
+USER_AGENT = (
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+)
+
 _session = requests.Session()
+_session.headers.update({"User-Agent": USER_AGENT, "Accept": "application/json"})
 
 
 def fetch_json(url: str, retries: int = 2, backoff_seconds: float = 1.0) -> dict:
