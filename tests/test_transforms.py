@@ -145,7 +145,7 @@ def test_next_fixtures_label_marks_double_and_blank_gameweeks():
     upcoming = build_upcoming_team_fixtures(_fixtures(), ratings, next_event=5)
     labels = next_fixtures_label(upcoming, n_gws=3)
     # Team 1: GW5 double (home BBB, away CCC), GW6 blank, GW7 home CCC
-    assert labels[1] == "BBB+ccc — CCC"
+    assert labels[1] == "BBB (H)+CCC (A) — CCC (H)"
 
 
 def test_upcoming_window_starts_at_next_deadline_gameweek():
@@ -156,4 +156,4 @@ def test_upcoming_window_starts_at_next_deadline_gameweek():
     assert upcoming["event"].min() == 6
     assert (upcoming["window_start"] == 6).all()
     # Team 1 has no GW6 match: the label starts with a blank, not with GW7.
-    assert next_fixtures_label(upcoming, n_gws=2)[1] == "— CCC"
+    assert next_fixtures_label(upcoming, n_gws=2)[1] == "— CCC (H)"

@@ -202,6 +202,13 @@ def build_mart_players(
     # Value Added Per Million: points beyond the automatic appearance points,
     # per game actually played, divided by price. Plain points-per-million
     # rewards players just for being nailed-on starters; VAPM isolates returns.
+    # Points per match: total points divided by the matches the club has played,
+    # so weeks the player missed count as zero. On the 2025/26 backtest this
+    # ranked players for the next 5 gameweeks about as well as the one-gameweek
+    # projection (0.48 vs 0.51) while staying an observed fact rather than a
+    # forecast. Per-90 rates scored 0.17, because they ignore whether a player
+    # plays at all.
+    df["points_per_match"] = safe_divide(df["total_points"], df["team_fixtures"])
     df["vapm"] = safe_divide(df["avg_non_appearance_points"], df["price"])
     df["start_rate"] = safe_divide(df["starts"], df["team_fixtures"])
     df["sixty_minute_rate"] = safe_divide(df["games_60"], df["starts"])

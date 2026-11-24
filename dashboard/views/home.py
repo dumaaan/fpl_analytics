@@ -44,8 +44,9 @@ if not last_finished.empty:
 # --- Best picks ------------------------------------------------------------
 st.subheader(f"Best picks for GW{next_gw}" if next_gw else "Best picks")
 st.caption(
-    f"Top 5 by projected points (xPts) for each position. Players need {MIN_MINUTES_FOR_PER_90}+ minutes "
-    "and a 75%+ chance to play. Sidebar price and team filters apply. Select a row to open the player page."
+    f"Top 5 by points per match for each position \u2014 total points divided by the matches their club "
+    f"has played, so missed weeks count as zero. Players need {MIN_MINUTES_FOR_PER_90}+ minutes and a 75%+ "
+    "chance to play. Sidebar filters apply. Select a row to open that player."
 )
 eligible = apply_filters(players, use_minutes=False)
 eligible = eligible[(eligible["minutes"] >= MIN_MINUTES_FOR_PER_90) & (eligible["availability"] >= 0.75)]
@@ -55,17 +56,18 @@ for col, position in zip(pick_cols, POSITIONS):
     with col:
         st.markdown(f"**{POSITION_NAMES[position]}**")
         top = (eligible[eligible["position"] == position]
-               .dropna(subset=["xpts_next_gw"]).nlargest(5, "xpts_next_gw").reset_index(drop=True))
+               .dropna(subset=["points_per_match"]).nlargest(5, "points_per_match").reset_index(drop=True))
         event = st.dataframe(
             top,
-            column_order=["web_name", "team_short", "price", "xpts_next_gw", "next_fixtures"],
+            column_order=["web_name", "team_short", "price", "points_per_match", "next_fixtures"],
             column_config={
                 "web_name": st.column_config.TextColumn("Player"),
                 "team_short": st.column_config.TextColumn("Team"),
                 "price": st.column_config.NumberColumn("£m", format="%.1f"),
-                "xpts_next_gw": st.column_config.NumberColumn("xPts", format="%.1f", help=METRICS["xpts_next_gw"].help),
+                "points_per_match": st.column_config.NumberColumn(
+                    "Per match", format="%.2f", help=METRICS["points_per_match"].help),
                 "next_fixtures": st.column_config.TextColumn(
-                    "Next 5 GWs", help="HOME opponents in capitals, away in lower case. + marks a double, — a blank."
+                    "Next 5 GWs", help="Opponent, then home (H) or away (A). + marks a double, — a blank."
                 ),
             },
             hide_index=True,

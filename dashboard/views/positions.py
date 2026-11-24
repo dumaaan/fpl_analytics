@@ -1,31 +1,50 @@
+"""A position page, built as three bands: decide, evidence, explain.
+
+Each band has a deliberately different density. The first is one sentence and
+one picture of the whole field. The second is the table, which is the page.
+The third explains where the points came from.
+"""
+
 import pandas as pd
 import streamlit as st
 
 from dashboard.catalog import (
     FIXTURE_SIGNAL,
     METRICS,
-    POSITION_INTROS,
+    POSITION_ALL_COLUMNS,
     POSITION_NAMES,
     POSITION_QUADRANT,
     POSITION_TABLE_COLUMNS,
     QUADRANT_NOTES,
 )
-from dashboard.charts import POSITION_COLORS, points_source_chart, quadrant_chart
+from dashboard.charts import (
+    POSITION_COLORS,
+    points_earned_chart,
+    points_given_chart,
+    points_per_match_strip,
+    quadrant_chart,
+)
 from dashboard.common import (
     BASE_COLUMN_CONFIG,
     apply_filters,
+    ease_cell_style,
+    fixture_run,
     for_display,
     load_players_or_stop,
     metric_column_config,
-    position_percentiles,
 )
 from dashboard.queries import get_player_gameweeks, get_team_fixtures
-from fpl_analytics.config import MIN_MINUTES_FOR_PER_90
 
 PLAYER_PAGE = "views/player.py"
+TEAM_NAMES = {"ARS": "Arsenal", "AVL": "Aston Villa", "BHA": "Brighton", "BOU": "Bournemouth",
+              "BRE": "Brentford", "BUR": "Burnley", "CHE": "Chelsea", "CRY": "Crystal Palace",
+              "EVE": "Everton", "FUL": "Fulham", "LEE": "Leeds", "LIV": "Liverpool",
+              "MCI": "Manchester City", "MUN": "Manchester United", "NEW": "Newcastle",
+              "NFO": "Nottingham Forest", "SUN": "Sunderland", "TOT": "Tottenham",
+              "WHU": "West Ham", "WOL": "Wolves"}
 
 
-def _last_six_points(player_ids: pd.Series) -> pd.Series:
+def _last_six(player_ids: pd.Series) -> pd.Series:
     history = get_player_gameweeks()
     if history.empty:
         return pd.Series([[] for _ in player_ids], index=player_ids.index)
@@ -34,144 +53,129 @@ def _last_six_points(player_ids: pd.Series) -> pd.Series:
     return player_ids.map(last).apply(lambda v: v if isinstance(v, list) else [])
 
 
-def _easiest_run(position: str, n_gws: int = 5) -> tuple[str, float] | None:
+def _easiest_run(position: str, n_gws: int = 5) -> str | None:
     fixtures = get_team_fixtures()
     if fixtures.empty:
         return None
     value_col, _, _ = FIXTURE_SIGNAL[position]
     first = int(fixtures["window_start"].iloc[0])
-    window = fixtures[fixtures["event"] < first + n_gws]
-    totals = window.groupby("team_short")[value_col].sum().sort_values(ascending=False)
+    totals = (fixtures[fixtures["event"] < first + n_gws]
+              .groupby("team_short")[value_col].sum().sort_values(ascending=False))
     if st.session_state.get("f_teams"):
         totals = totals[totals.index.isin(st.session_state["f_teams"])]
-    if totals.empty:
-        return None
-    return totals.index[0], float(totals.iloc[0])
+    return None if totals.empty else totals.index[0]
 
 
-def _kpi_row(position: str, players: pd.DataFrame) -> None:
-    cols = st.columns(4)
-    rateable = players[players["minutes"] >= MIN_MINUTES_FOR_PER_90]
+def _decide(position: str, filtered: pd.DataFrame) -> None:
+    """One sentence that answers the page, then the whole field on one scale."""
+    st.title(POSITION_NAMES[position])
+    rated = filtered.dropna(subset=["points_per_match"])
+    if rated.empty:
+        st.info("No players match the filters. Lower the minimum minutes or widen the price range.")
+        return
 
-    with cols[0]:
-        best = rateable.dropna(subset=["vapm"]).nlargest(1, "vapm")
-        if best.empty:
-            st.metric("Best value (VAPM)", "—", border=True)
-        else:
-            row = best.iloc[0]
-            st.metric("Best value (VAPM)", row["web_name"], f"{row['vapm']:.2f} VAPM · £{row['price']:.1f}m",
-                      delta_color="off", delta_arrow="off", border=True, help=METRICS["vapm"].help)
-    with cols[1]:
-        best = rateable.dropna(subset=["xpts_next_gw"]).nlargest(1, "xpts_next_gw")
-        if best.empty:
-            st.metric("Top xPts next GW", "—", border=True)
-        else:
-            row = best.iloc[0]
-            st.metric("Top xPts next GW", row["web_name"], f"{row['xpts_next_gw']:.1f} xPts · {row['team_short']}",
-                      delta_color="off", delta_arrow="off", border=True, help=METRICS["xpts_next_gw"].help)
-    with cols[2]:
-        run = _easiest_run(position)
-        _, _, unit = FIXTURE_SIGNAL[position]
-        if run is None:
-            st.metric("Easiest 5-GW run", "—", border=True)
-        else:
-            st.metric("Easiest 5-GW run", run[0], f"{run[1]:.1f} {unit}", delta_color="off", delta_arrow="off",
-                      border=True, help="Best team fixtures over the next 5 gameweeks for this position.")
-    with cols[3]:
-        movers = players.dropna(subset=["price_change_tonight_pct"]).nlargest(1, "price_change_tonight_pct")
-        if movers.empty or movers.iloc[0]["price_change_tonight_pct"] <= 0:
-            st.metric("Closest to a price rise", "—", border=True)
-        else:
-            row = movers.iloc[0]
-            st.metric("Closest to a price rise", row["web_name"],
-                      f"{row['price_change_tonight_pct']:.0f}% tonight · £{row['price']:.1f}m",
-                      delta_color="off", delta_arrow="off", border=True,
-                      help=METRICS["price_change_tonight_pct"].help)
+    best = rated.nlargest(1, "points_per_match").iloc[0]
+    cheap = rated[rated["price"] <= rated["price"].quantile(0.4)].nlargest(1, "points_per_match")
+    run = _easiest_run(position)
+    parts = [f"**{best['web_name']}** has returned **{best['points_per_match']:.1f} points a match**, "
+             f"the most of any {POSITION_NAMES[position].lower().rstrip('s')} at £{best['price']:.1f}m."]
+    if not cheap.empty and cheap.iloc[0]["web_name"] != best["web_name"]:
+        c = cheap.iloc[0]
+        parts.append(f"The best of the cheaper options is **{c['web_name']}** at £{c['price']:.1f}m, "
+                     f"on {c['points_per_match']:.1f}.")
+    if run:
+        parts.append(f"**{TEAM_NAMES.get(run, run)}** have the kindest next five weeks.")
+    st.markdown(" ".join(parts))
+
+    st.altair_chart(points_per_match_strip(rated), width="stretch")
+    st.caption(f"Every rated {POSITION_NAMES[position].lower().rstrip('s')} on one scale. "
+               "Points per match counts weeks a player missed as zero, so it covers how well he "
+               "plays and how often. The dashed line is the typical player.")
 
 
-def _player_table(position: str, position_players: pd.DataFrame, filtered: pd.DataFrame) -> None:
-    metric_keys = POSITION_TABLE_COLUMNS[position]
-    table = filtered.copy()
-    table["xpts_pct"] = position_percentiles(position_players, ["xpts_per_90"])["xpts_per_90"].reindex(table.index)
-    table["last_6"] = _last_six_points(table["id"])
-    table = table.sort_values(["xpts_next_gw", "total_points"], ascending=False, na_position="last")
-    table = for_display(table, metric_keys).reset_index(drop=True)
+def _evidence(position: str, filtered: pd.DataFrame) -> None:
+    show_all = st.toggle("Show every column", key=f"all_cols_{position}",
+                         help="The seven columns here answer most questions. This adds every "
+                              "metric the pipeline computes.")
+    metric_keys = (POSITION_ALL_COLUMNS if show_all else POSITION_TABLE_COLUMNS)[position]
 
-    columns = ["web_name", "team_short", "price", "status_label", "games_played", *metric_keys,
-               "last_6", "next_fixtures", "xpts_pct"]
-    column_config = {
+    table = filtered.sort_values(["points_per_match", "total_points"], ascending=False,
+                                 na_position="last").reset_index(drop=True)
+    table["last_6"] = _last_six(table["id"])
+    runs, ease = fixture_run(table["team_short"])
+    table = pd.concat([for_display(table, metric_keys), runs], axis=1)
+
+    columns = ["web_name", "team_short", "price", *metric_keys, *runs.columns, "last_6", "status_label"]
+    config = {
         **BASE_COLUMN_CONFIG,
         **metric_column_config(metric_keys),
-        "xpts_pct": st.column_config.ProgressColumn(
-            "xPts/90 pct", min_value=0, max_value=100, format="%.0f",
-            help=f"Percentile of xPts/90 among players in this position with {MIN_MINUTES_FOR_PER_90}+ minutes.",
-        ),
+        **{c: st.column_config.TextColumn(c, help="Opponent and venue. The colour is how hard the "
+                                                  "fixture is for this position.") for c in runs.columns},
     }
+    styled = table.style.apply(
+        lambda frame: pd.DataFrame(
+            {c: ease[c].map(ease_cell_style) if c in ease else "" for c in frame.columns},
+            index=frame.index),
+        axis=None)
 
-    st.caption(f"{len(table)} players. Select a row to open the player page. Hover a column name for its meaning.")
+    st.caption(f"{len(table)} players, best first. Select a row to open that player. "
+               "Hover any column name for what it means.")
     event = st.dataframe(
-        table,
-        column_order=columns,
-        column_config=column_config,
-        hide_index=True,
-        on_select="rerun",
-        selection_mode="single-row",
-        key=f"table_{position}",
-        height=min(600, 36 * (len(table) + 1) + 4),
+        styled, column_order=columns, column_config=config, hide_index=True,
+        on_select="rerun", selection_mode="single-row", key=f"table_{position}",
+        height=min(640, 36 * (len(table) + 1) + 4),
     )
     if event.selection.rows:
-        player_id = int(table.iloc[event.selection.rows[0]]["id"])
-        st.switch_page(PLAYER_PAGE, query_params={"player": str(player_id)})
+        st.switch_page(PLAYER_PAGE, query_params={"player": str(int(table.iloc[event.selection.rows[0]]["id"]))})
 
-    st.download_button(
-        "Download table as CSV",
-        filtered.to_csv(index=False).encode("utf-8"),
-        file_name=f"fpl-{position.lower()}.csv",
-        mime="text/csv",
-    )
+    st.download_button("Download this table", filtered.to_csv(index=False).encode("utf-8"),
+                       file_name=f"fpl-{position.lower()}.csv", mime="text/csv")
 
 
-def _charts(position: str, filtered: pd.DataFrame) -> None:
+def _explain(position: str, filtered: pd.DataFrame) -> None:
+    top = filtered.nlargest(10, "total_points")
+    if top.empty:
+        return
+    st.subheader("Where the points came from")
+    left, right = st.columns(2, gap="large")
+    with left:
+        st.caption("**Earned** — points won by playing well.")
+        st.altair_chart(points_earned_chart(top), width="stretch")
+    with right:
+        st.caption("**Given** — points for turning up, and for the team keeping it tight.")
+        st.altair_chart(points_given_chart(top), width="stretch")
+
     x_key, y_key = POSITION_QUADRANT[position]
-    chart_data = for_display(filtered, [k for k in (x_key, y_key) if k in METRICS])
+    rated = filtered.dropna(subset=["points_per_match"])
+    above = rated[rated["points_per_match"] >= rated["points_per_match"].median()]
+    if above.empty:
+        return
+    chart_data = for_display(above, [k for k in (x_key, y_key) if k in METRICS])
     x_label = METRICS[x_key].label if x_key in METRICS else "Price (£m)"
     y_label = METRICS[y_key].label
-    x_fmt = ".0f" if x_key in METRICS and METRICS[x_key].percent else (".1f" if x_key == "price" else ".2f")
-    y_fmt = ".0f" if METRICS[y_key].percent else ".2f"
-
-    left, right = st.columns([1.25, 1], gap="large")
-    with left:
-        st.subheader(f"{y_label} vs {x_label}")
-        st.caption(QUADRANT_NOTES[position] + " Dashed lines are medians. Labels mark the top 8 by xPts/90.")
-        st.altair_chart(
-            quadrant_chart(chart_data, x_key, y_key, x_label, y_label, POSITION_COLORS[position],
-                           x_format=x_fmt, y_format=y_fmt),
-            width="stretch",
-        )
-    with right:
-        st.subheader("Where the points come from")
-        top = filtered.nlargest(15, "total_points")
-        st.caption("Top 15 by total points. Deductions go left of 0.")
-        if top.empty:
-            st.caption("No players match the filters.")
-        else:
-            st.altair_chart(points_source_chart(top), width="stretch")
+    st.subheader(f"{y_label} against {x_label}")
+    st.caption(QUADRANT_NOTES[position] + " Only players above the median are plotted, and the "
+                                          "best eight are named.")
+    st.altair_chart(
+        quadrant_chart(chart_data, x_key, y_key, x_label, y_label, POSITION_COLORS[position],
+                       rank_field="points_per_match",
+                       x_format=".0f" if x_key in METRICS and METRICS[x_key].percent else
+                       (".1f" if x_key == "price" else ".2f"),
+                       y_format=".0f" if METRICS[y_key].percent else ".2f"),
+        width="stretch")
 
 
 def render(position: str) -> None:
     players = load_players_or_stop()
-    position_players = players[players["position"] == position]
-    filtered = apply_filters(position_players)
+    filtered = apply_filters(players[players["position"] == position])
 
-    st.title(POSITION_NAMES[position])
-    st.caption(POSITION_INTROS[position])
-
-    _kpi_row(position, filtered)
-    if filtered.empty:
-        st.info("No players match the filters. Lower the minimum minutes or widen the price range in the sidebar.")
+    _decide(position, filtered)
+    if filtered.dropna(subset=["points_per_match"]).empty:
         return
-    _player_table(position, position_players, filtered)
-    _charts(position, filtered)
+    st.divider()
+    _evidence(position, filtered)
+    st.divider()
+    _explain(position, filtered)
 
 
 def goalkeepers() -> None:

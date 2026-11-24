@@ -19,6 +19,11 @@ class Metric:
 
 _METRICS = [
     Metric("total_points", "Pts", "Total FPL points this season.", "%d"),
+    Metric("points_per_match", "Points per match",
+           "Total points divided by the matches this player's club has played. Weeks he missed "
+           "count as zero, so this covers both how well he plays and how often. On last season's "
+           "data it ranked players for the next five gameweeks about as well as a forecast, while "
+           "staying an observed fact.", "%.2f"),
     Metric("games_played", "GP", "Games played (1+ minutes). Every rate uses this sample.", "%d"),
     Metric("minutes", "Mins", "Minutes played this season.", "%d"),
     Metric("xpts_next_gw", "xPts next GW",
@@ -92,17 +97,31 @@ POSITION_INTROS = {
     "FWD": "Forwards score almost only from goals (4), assists (3) and bonus. Minutes and xG share matter most.",
 }
 
+# The table shows seven columns. A midfielder page used to carry twenty, of
+# which about eight sat off-screen unread. Everything cut is still reachable
+# through the "show every column" switch.
 POSITION_TABLE_COLUMNS = {
-    "GK": ["total_points", "xpts_next_gw", "xpts_per_90", "save_points_per_90", "expected_goals_conceded_per_90",
-           "goals_prevented", "clean_sheet_rate_60", "cs_expected_next_gw", "start_rate", "bonus_per_90", "vapm"],
-    "DEF": ["total_points", "xpts_next_gw", "xpts_per_90", "defcon_points_per_90", "defcon_hit_rate_adj",
-            "defcon_near_miss_rate", "expected_goals_conceded_per_90", "clean_sheet_rate_60", "cs_expected_next_gw",
-            "xgi_per_90", "sixty_minute_rate", "set_pieces", "vapm"],
-    "MID": ["total_points", "xpts_next_gw", "xpts_per_90", "xg_per_90", "xa_per_90", "xg_share", "goals_minus_xg",
-            "assists_minus_xa", "return_rate", "haul_rate", "ceiling", "defcon_hit_rate_adj", "xgi_trend",
+    "GK": ["points_per_match", "clean_sheet_rate_60", "total_points"],
+    "DEF": ["points_per_match", "defcon_hit_rate_adj", "total_points"],
+    "MID": ["points_per_match", "return_rate", "total_points"],
+    "FWD": ["points_per_match", "return_rate", "total_points"],
+}
+
+# Shown when the reader asks for everything.
+POSITION_ALL_COLUMNS = {
+    "GK": ["points_per_match", "total_points", "xpts_next_gw", "xpts_per_90", "save_points_per_90",
+           "expected_goals_conceded_per_90", "goals_prevented", "clean_sheet_rate_60",
+           "cs_expected_next_gw", "start_rate", "bonus_per_90", "vapm"],
+    "DEF": ["points_per_match", "total_points", "xpts_next_gw", "xpts_per_90", "defcon_points_per_90",
+            "defcon_hit_rate_adj", "defcon_near_miss_rate", "expected_goals_conceded_per_90",
+            "clean_sheet_rate_60", "cs_expected_next_gw", "xgi_per_90", "sixty_minute_rate",
             "set_pieces", "vapm"],
-    "FWD": ["total_points", "xpts_next_gw", "xpts_per_90", "xg_per_90", "minutes_per_xgi", "xg_share", "xg_next_3gw",
-            "goals_minus_xg", "haul_rate", "ceiling", "start_rate", "bonus_per_90", "set_pieces", "vapm"],
+    "MID": ["points_per_match", "total_points", "xpts_next_gw", "xpts_per_90", "xg_per_90", "xa_per_90",
+            "xg_share", "goals_minus_xg", "assists_minus_xa", "return_rate", "haul_rate", "ceiling",
+            "defcon_hit_rate_adj", "xgi_trend", "set_pieces", "vapm"],
+    "FWD": ["points_per_match", "total_points", "xpts_next_gw", "xpts_per_90", "xg_per_90",
+            "minutes_per_xgi", "xg_share", "xg_next_3gw", "goals_minus_xg", "haul_rate", "ceiling",
+            "start_rate", "bonus_per_90", "set_pieces", "vapm"],
 }
 
 POSITION_PROFILE = {
