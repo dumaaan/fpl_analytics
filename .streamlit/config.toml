@@ -1,0 +1,76 @@
+# Visual system: Ulm 1972 rather than Dessau 1925 — a grid, type that makes
+# hierarchy from weight and size alone, and colour used only as a code.
+# Nothing here is decorative: every value does a job.
+
+[theme]
+base = "light"
+font = "Hanken Grotesk"
+headingFont = "Hanken Grotesk"
+baseFontSize = 16
+headingFontSizes = ["2.75rem", "1.625rem", "1.125rem", "1rem", "0.9375rem", "0.8125rem"]
+headingFontWeights = [700, 600, 600, 600, 600, 600]
+
+# No rounded corners anywhere. Edges are honest.
+baseRadius = "none"
+buttonRadius = "none"
+showWidgetBorder = true
+showSidebarBorder = true
+
+backgroundColor = "#F4F4F2"       # ground: neutral grey-white, never warm cream
+secondaryBackgroundColor = "#FFFFFF"
+textColor = "#17181A"
+primaryColor = "#17181A"          # selection and buttons invert to ink; no brand accent competes
+borderColor = "#D8D8D4"
+linkColor = "#17181A"
+linkUnderline = true
+dataframeBorderColor = "#D8D8D4"
+dataframeHeaderBackgroundColor = "#F4F4F2"
+metricValueFontSize = "2rem"
+metricValueFontWeight = 700
+
+# Difficulty and verdicts: one ordered scale, easy to hard. Lightness steps as
+# well as hue, so it survives colour-blindness and greyscale printing.
+chartDivergingColors = ["#2E7D6B", "#8ABFA5", "#DDD6C3", "#D98E4A", "#9E4228"]
+chartSequentialColors = ["#E8EFEC", "#C5DCD3", "#A1C8BA", "#7CB4A1", "#589F88", "#3B8A70", "#2E7D6B"]
+# Points sources: goals are gold, deductions red, and what everyone gets is grey.
+chartCategoricalColors = ["#C9A227", "#9C7C38", "#6E6A5E", "#2E7D6B", "#8ABFA5", "#C3C7C4", "#4E7A9E", "#9E4228"]
+
+[theme.sidebar]
+backgroundColor = "#EDEDEA"
+secondaryBackgroundColor = "#F4F4F2"
+borderColor = "#D8D8D4"
+
+[theme.dark]
+backgroundColor = "#17181A"
+secondaryBackgroundColor = "#202225"
+textColor = "#F4F4F2"
+primaryColor = "#F4F4F2"
+borderColor = "#32353A"
+linkColor = "#F4F4F2"
+dataframeBorderColor = "#32353A"
+dataframeHeaderBackgroundColor = "#202225"
+chartDivergingColors = ["#2A7A68", "#6AA78D", "#B3AC98", "#C27C3C", "#903E24"]
+chartSequentialColors = ["#1E2A27", "#24413A", "#2A584D", "#306F60", "#368673", "#3C9D86", "#42B499"]
+chartCategoricalColors = ["#C9A227", "#9C7C38", "#8A867A", "#2E7D6B", "#8ABFA5", "#5A5E62", "#4E7A9E", "#B0543A"]
+
+[theme.dark.sidebar]
+backgroundColor = "#141517"
+secondaryBackgroundColor = "#202225"
+borderColor = "#32353A"
+
+# Hanken Grotesk, the closest open relative of the Univers that Otl Aicher used
+# for Munich 1972. One variable file per unicode range covers every weight;
+# latin-ext is needed for names such as Muharemović.
+[[theme.fontFaces]]
+family = "Hanken Grotesk"
+url = "https://fonts.gstatic.com/s/hankengrotesk/v12/ieVn2YZDLWuGJpnzaiwFXS9tYtpd59CxCis4.woff2"
+weight = "100 900"
+style = "normal"
+unicodeRange = "U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD"
+
+[[theme.fontFaces]]
+family = "Hanken Grotesk"
+url = "https://fonts.gstatic.com/s/hankengrotesk/v12/ieVn2YZDLWuGJpnzaiwFXS9tYtpT59CxCis4UvI.woff2"
+weight = "100 900"
+style = "normal"
+unicodeRange = "U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF"

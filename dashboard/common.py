@@ -2,24 +2,23 @@ import pandas as pd
 import streamlit as st
 
 from dashboard.catalog import METRICS
-from dashboard.queries import get_all_players, get_last_refresh
+from dashboard.queries import get_all_players, get_last_refresh, get_team_fixtures
 from fpl_analytics.config import MIN_MINUTES_FOR_PER_90
 from fpl_analytics.refresh import is_stale, read_last_run
 
 POSITIONS = ["GK", "DEF", "MID", "FWD"]
 NO_DATA_MESSAGE = "No data yet. Run `poetry run fpl-pipeline`, then reload this page."
 
-# Fixture ease, 1 = easiest ... 5 = hardest: a diverging blue <-> red scale with
-# a neutral middle. Each step carries its own text color, and the number or
-# percentage is always printed in the cell too.
+# Fixture ease, 1 = easiest ... 5 = hardest. Lightness steps as well as hue,
+# so the scale survives colour-blindness and greyscale. The cell always prints
+# the opponent too, so colour is never the only signal.
 EASE_COLORS = {
-    1: ("#256abf", "#ffffff"),
-    2: ("#9ec5f4", "#0b0b0b"),
-    3: ("#f0efec", "#0b0b0b"),
-    4: ("#f4b3b2", "#0b0b0b"),
-    5: ("#c53a3a", "#ffffff"),
+    1: ("#2E7D6B", "#FFFFFF"),
+    2: ("#8ABFA5", "#17181A"),
+    3: ("#DDD6C3", "#17181A"),
+    4: ("#D98E4A", "#17181A"),
+    5: ("#9E4228", "#FFFFFF"),
 }
-
 
 def format_utc(timestamp: object, fmt: str) -> str:
     """DuckDB returns TIMESTAMPTZ values in the machine's local time zone.
@@ -164,3 +163,31 @@ def ease_legend() -> None:
     )
     st.markdown(f"{chips} <span style='font-size:0.85rem;opacity:.75'>1 easiest → 5 hardest</span>",
                 unsafe_allow_html=True)
+
+
+def fixture_run(team_shorts: pd.Series, n_gws: int = 5) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """The next `n_gws` gameweeks as (text, ease) frames, one column per gameweek.
+
+    Text reads "COV (H)". Home and away are spelled out rather than coded by
+    letter case, which was easy to miss. A double gameweek joins with "+",
+    a blank shows a dash.
+    """
+    fixtures = get_team_fixtures()
+    empty = pd.DataFrame(index=team_shorts.index)
+    if fixtures.empty:
+        return empty, empty
+    first = int(fixtures["window_start"].iloc[0])
+    events = list(range(first, first + n_gws))
+    window = fixtures[fixtures["event"].isin(events)]
+
+    text, ease = {}, {}
+    for event in events:
+        rows = window[window["event"] == event]
+        by_team = rows.groupby("team_short")
+        label = by_team.apply(
+            lambda g: " + ".join(f"{o} ({'H' if h else 'A'})"
+                                 for o, h in zip(g["opponent_short"], g["is_home"])),
+            include_groups=False)
+        text[f"GW{event}"] = team_shorts.map(label).fillna("—")
+        ease[f"GW{event}"] = team_shorts.map(by_team["defence_ease"].mean())
+    return pd.DataFrame(text, index=team_shorts.index), pd.DataFrame(ease, index=team_shorts.index)

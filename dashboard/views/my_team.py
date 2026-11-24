@@ -27,8 +27,10 @@ from fpl_analytics.fetch.entry import fetch_team
 
 PLAYER_PAGE = "views/player.py"
 POSITION_ORDER = {"GK": 0, "DEF": 1, "MID": 2, "FWD": 3}
-HORIZON_LABELS = {1: "Next GW", 3: "Next 3 GWs", 5: "Next 5 GWs"}
-HORIZON_PHRASES = {1: "next gameweek", 3: "next 3 gameweeks", 5: "next 5 gameweeks"}
+# One gameweek is mostly noise: on last season's data a one-week projection
+# ranked players worse than a three-week one, so the planner starts at three.
+HORIZON_LABELS = {3: "Next 3 GWs", 5: "Next 5 GWs"}
+HORIZON_PHRASES = {3: "next 3 gameweeks", 5: "next 5 gameweeks"}
 # Status palette (good / warning / critical), always shown with the word too.
 VERDICT_STYLES = {
     "Keep": "background-color: #0ca30c; color: #ffffff;",

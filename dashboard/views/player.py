@@ -87,8 +87,10 @@ rank = int((position_players["total_points"] > player["total_points"]).sum()) + 
 kpis = st.columns(6)
 kpis[0].metric("Total points", int(player["total_points"]), f"#{rank} of {len(position_players)} {position}",
                delta_color="off", delta_arrow="off", border=True)
-kpis[1].metric("xPts next GW", "—" if pd.isna(player["xpts_next_gw"]) else f"{player['xpts_next_gw']:.1f}",
-               border=True, help=METRICS["xpts_next_gw"].help)
+kpis[1].metric("Points per match",
+               "—" if pd.isna(player["points_per_match"]) else f"{player['points_per_match']:.2f}",
+               _top_share("points_per_match"), delta_color="off", delta_arrow="off", border=True,
+               help=METRICS["points_per_match"].help)
 kpis[2].metric("xPts/90", "—" if pd.isna(player["xpts_per_90"]) else f"{player['xpts_per_90']:.2f}",
                _top_share("xpts_per_90"), delta_color="off", delta_arrow="off", border=True,
                help=METRICS["xpts_per_90"].help)
@@ -161,7 +163,7 @@ with right:
 
 if other is not None:
     st.subheader(f"{player['web_name']} vs {other['web_name']}")
-    compare_keys = ["total_points", "xpts_next_gw", "xpts_next_3gw", "xpts_per_90", "points_per_90", "luck_per_90",
+    compare_keys = ["total_points", "points_per_match", "xpts_next_3gw", "xpts_per_90", "points_per_90", "luck_per_90",
                     "vapm", "xgi_per_90", "bonus_per_90", "start_rate"]
     # Column names must differ even for two players with the same web name.
     name_a = f"{player['web_name']} ({player['team_short']})"
