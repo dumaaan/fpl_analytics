@@ -1,0 +1,48 @@
+name: Refresh FPL data
+
+# 09:30 UTC: after FPL's overnight price changes (about 00:30 UTC) and after
+# gameweek scores are final (9am UK time the day after the last match).
+# GitHub may start scheduled runs 15-60 minutes late.
+on:
+  schedule:
+    - cron: "30 9 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: refresh-data
+  cancel-in-progress: false
+
+permissions:
+  contents: write  # upload the database to the data-latest release
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Build the database from the FPL API
+        run: python -m fpl_analytics.pipeline
+
+      - name: Publish it for the hosted dashboard
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python -m fpl_analytics.publish
+
+      - name: Keep the log if the run failed
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: refresh-logs
+          path: data/logs/
+          if-no-files-found: ignore
+          retention-days: 7

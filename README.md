@@ -71,7 +71,13 @@ Install [Poetry](https://python-poetry.org/docs/#installation) once, if you do n
    poetry run fpl-backtest --season 2025-26
    ```
 
-5. Run the tests:
+5. Optional: refresh the data every day on its own (macOS, see [Daily refresh](#daily-refresh)):
+
+   ```bash
+   poetry run fpl-schedule install
+   ```
+
+6. Run the tests:
 
    ```bash
    poetry run pytest
@@ -118,6 +124,32 @@ The sidebar filters (price range, minimum minutes, teams, available only) apply 
 - **Sell** means unlikely to play, or a replacement clearly scores more. **Watch** means a doubt, few starts, no projection yet (under 180 minutes), a price fall tonight, or a smaller upgrade.
 
 The logic is in `fpl_analytics/advisor.py`, with tests in `tests/test_advisor.py`.
+
+## Daily refresh
+
+`poetry run fpl-schedule install` adds a launchd job that runs `fpl-refresh` every day at 18:30 local time (09:30 UTC on a Mac set to Korea time). That time is after FPL's overnight price changes and after gameweek scores are final. Choose another time with `--time HH:MM`.
+
+- **Sleep:** if the Mac is asleep at that time, the job runs when it wakes. A Mac that is switched off skips the day.
+- **Retries:** each run tries up to 3 times, 15 minutes apart, because the network or FPL may not be ready.
+- **No overlap:** a lock stops a scheduled and a manual refresh from running at the same time. The second one exits.
+- **Logs:** one log file per run in `data/logs/` (the newest 30 are kept). `data/logs/last_run.json` holds the last result.
+- **Failures:** macOS shows a notification. The dashboard keeps the previous data and shows an error in the sidebar. If the newest data is older than 36 hours, the sidebar shows a warning.
+
+Other commands:
+
+```bash
+poetry run fpl-schedule status
+```
+
+```bash
+poetry run fpl-schedule run-now
+```
+
+```bash
+poetry run fpl-schedule uninstall
+```
+
+`status` shows the schedule, the last run and its log. `run-now` starts the job the same way launchd does, to test it. `uninstall` removes the job.
 
 ## Backtest
 
