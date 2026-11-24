@@ -28,6 +28,9 @@ fpl_analytics/          # the pipeline package
   db.py                  # DuckDB helpers
   pipeline.py            # runs fetch -> transform -> load, in order
 
+streamlit_app.py         # entry point for Streamlit Community Cloud
+.github/workflows/       # the daily data refresh on GitHub Actions
+
 dashboard/               # the Streamlit app
   app.py                 # entry point: navigation and sidebar filters
   views/                 # Gameweek, position pages, Player detail, Fixture planner
@@ -150,6 +153,54 @@ poetry run fpl-schedule uninstall
 ```
 
 `status` shows the schedule, the last run and its log. `run-now` starts the job the same way launchd does, to test it. `uninstall` removes the job.
+
+## Hosting it online
+
+The dashboard runs on [Streamlit Community Cloud](https://share.streamlit.io), free. The hosted app has no pipeline, so a scheduled GitHub Actions job builds the data and publishes it, and the app downloads it.
+
+```
+GitHub Actions (daily, 09:30 UTC)
+  builds the data  ->  uploads fpl.duckdb to the "data-latest" release
+                                   |
+Streamlit Community Cloud  <--------+  downloads it on start, then every 30 minutes
+```
+
+### One-time setup
+
+1. **Turn on the daily job.** Once `.github/workflows/refresh.yml` is on the default branch, open the repository's **Actions** tab, choose **Refresh FPL data**, and press **Run workflow**. This creates the `data-latest` release and proves the FPL API answers GitHub's servers.
+
+2. **Deploy the app.** Sign in at [share.streamlit.io](https://share.streamlit.io) with GitHub, choose **Create app**, and set:
+
+   | Field | Value |
+   | --- | --- |
+   | Repository | `dumaaan/fpl_analytics` |
+   | Branch | `main` |
+   | Main file path | `streamlit_app.py` |
+   | Python version | 3.12 |
+
+3. **Point the app at the data.** In the app's **Settings → Secrets**, add this line, then save:
+
+   ```toml
+   FPL_DB_URL = "https://github.com/dumaaan/fpl_analytics/releases/download/data-latest/fpl.duckdb"
+   ```
+
+   Without the secret the app starts but shows no data, because it has no database to read.
+
+### How it behaves when hosted
+
+- **Data:** downloaded on start, then re-checked every 30 minutes. An unchanged file is not downloaded again.
+- **Sleeping:** Community Cloud sleeps an app after 12 hours with no visitors. It wakes on the next visit.
+- **Updates:** a push to `main` redeploys the app. A change to `requirements.txt` reinstalls the packages.
+- **My team:** this page calls the FPL API live from Streamlit's servers. If FPL blocks them, that page fails while every other page keeps working, because they read the published database.
+- **Local runs are unchanged:** without `FPL_DB_URL`, the app reads the file the pipeline wrote.
+
+### Publishing data by hand
+
+```bash
+poetry run fpl-publish
+```
+
+Uploads the current database to the `data-latest` release. The launchd job on your Mac can do this too, as a fallback if GitHub Actions ever cannot reach the FPL API.
 
 ## Backtest
 
