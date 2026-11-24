@@ -6,6 +6,15 @@ name: Refresh FPL data
 on:
   schedule:
     - cron: "30 9 * * *"
+  # Rebuild as soon as the code that produces the data changes. Without this,
+  # a merge puts new code on the hosted app while the published data still
+  # comes from the old code, and pages that need a new column break until the
+  # next scheduled run.
+  push:
+    branches: [main]
+    paths:
+      - "fpl_analytics/**"
+      - "requirements.txt"
   workflow_dispatch:
 
 concurrency:
