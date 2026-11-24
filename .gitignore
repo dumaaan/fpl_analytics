@@ -19,3 +19,7 @@ data/raw/*.json
 # third-party datasets (personal use only, never commit)
 data/external/
 data/backtest/
+
+# refresh lock and logs
+data/.pipeline.lock
+data/logs/

@@ -4,9 +4,13 @@ from pathlib import Path
 
 def run_pipeline() -> None:
     """Entry point for `poetry run fpl-pipeline`."""
-    from fpl_analytics.pipeline import run
+    from fpl_analytics.pipeline import PipelineBusy, run
 
-    run()
+    try:
+        run()
+    except PipelineBusy as exc:
+        print(exc)
+        sys.exit(1)
 
 
 def run_dashboard() -> None:
