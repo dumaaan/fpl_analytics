@@ -141,7 +141,7 @@ BASE_COLUMN_CONFIG = {
     "status_label": st.column_config.TextColumn("Status"),
     "games_played": st.column_config.NumberColumn("GP", format="%d", help=METRICS["games_played"].help),
     "next_fixtures": st.column_config.TextColumn(
-        "Next 5 GWs", help="HOME opponents in capitals, away in lower case. + marks a double, — a blank."
+        "Next 5 GWs", help="Opponent, then home (H) or away (A). + marks a double, — a blank."
     ),
     "last_6": st.column_config.BarChartColumn("Last 6 GWs", help="Points in each of the last 6 gameweeks.",
                                               y_min=0, y_max=20),

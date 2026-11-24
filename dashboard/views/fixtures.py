@@ -30,7 +30,8 @@ mode = MODES[mode_name]
 
 st.caption(
     f"Use this view for {mode['for_positions']}. Teams are sorted by the best run first. "
-    "HOME opponents are in capitals and away opponents in lower case. A dash is a blank gameweek. "
+    "Each cell names the opponent and whether the match is home (H) or away (A). A dash is a "
+    "blank gameweek. "
     "Clean-sheet chance and goal threat come from each team's xG for and against this season, "
     "blended with FPL fixture difficulty while samples are small."
 )
@@ -44,7 +45,7 @@ window = fixtures[fixtures["event"].isin(events)]
 def _cell_text(rows: pd.DataFrame) -> str:
     parts = []
     for _, fx in rows.iterrows():
-        opponent = fx["opponent_short"] if fx["is_home"] else fx["opponent_short"].lower()
+        opponent = f"{fx['opponent_short']} ({'H' if fx['is_home'] else 'A'})"
         if mode["value"] == "cs_prob":
             parts.append(f"{opponent} {fx['cs_prob']:.0%}")
         elif mode["value"] == "xg_for":

@@ -67,7 +67,7 @@ for col, position in zip(pick_cols, POSITIONS):
                 "points_per_match": st.column_config.NumberColumn(
                     "Per match", format="%.2f", help=METRICS["points_per_match"].help),
                 "next_fixtures": st.column_config.TextColumn(
-                    "Next 5 GWs", help="HOME opponents in capitals, away in lower case. + marks a double, — a blank."
+                    "Next 5 GWs", help="Opponent, then home (H) or away (A). + marks a double, — a blank."
                 ),
             },
             hide_index=True,

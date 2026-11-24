@@ -408,7 +408,7 @@ event = st.dataframe(
         "points_last_4": st.column_config.NumberColumn("Pts last 4 GWs", format="%d"),
         "status_label": st.column_config.TextColumn("Status"),
         "next_fixtures": st.column_config.TextColumn(
-            "Next 5 GWs", help="HOME opponents in capitals, away in lower case. + marks a double, — a blank."),
+            "Next 5 GWs", help="Opponent, then home (H) or away (A). + marks a double, — a blank."),
     },
     hide_index=True,
     on_select="rerun",

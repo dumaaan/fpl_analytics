@@ -40,23 +40,11 @@ backgroundColor = "#EDEDEA"
 secondaryBackgroundColor = "#F4F4F2"
 borderColor = "#D8D8D4"
 
-[theme.dark]
-backgroundColor = "#17181A"
-secondaryBackgroundColor = "#202225"
-textColor = "#F4F4F2"
-primaryColor = "#F4F4F2"
-borderColor = "#32353A"
-linkColor = "#F4F4F2"
-dataframeBorderColor = "#32353A"
-dataframeHeaderBackgroundColor = "#202225"
-chartDivergingColors = ["#2A7A68", "#6AA78D", "#B3AC98", "#C27C3C", "#903E24"]
-chartSequentialColors = ["#1E2A27", "#24413A", "#2A584D", "#306F60", "#368673", "#3C9D86", "#42B499"]
-chartCategoricalColors = ["#C9A227", "#9C7C38", "#8A867A", "#2E7D6B", "#8ABFA5", "#5A5E62", "#4E7A9E", "#B0543A"]
-
-[theme.dark.sidebar]
-backgroundColor = "#141517"
-secondaryBackgroundColor = "#202225"
-borderColor = "#32353A"
+# Light is the theme this app ships with, for everyone. Defining a
+# [theme.dark] block here would make Streamlit follow each viewer's system
+# setting instead, which is not what we want: the grid and the fixture ramp
+# were drawn for paper. Readers who prefer dark can still choose it from the
+# app menu, and Streamlit derives it from the colours above.
 
 # Hanken Grotesk, the closest open relative of the Univers that Otl Aicher used
 # for Munich 1972. One variable file per unicode range covers every weight;

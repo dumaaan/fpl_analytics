@@ -190,9 +190,13 @@ def build_upcoming_team_fixtures(
 
 
 def next_fixtures_label(upcoming: pd.DataFrame, n_gws: int = 5) -> pd.Series:
-    """Per team, the next n gameweeks as FPL-style text: HOME opponents in
-    capitals, away opponents in lower case, doubles joined with "+", and a
-    dash for a blank gameweek. Example: "ARS che+BOU — liv MCI"."""
+    """Per team, the next n gameweeks as text: each opponent followed by (H)
+    for home or (A) for away, doubles joined with "+", and a dash for a blank
+    gameweek. Example: "ARS (H) CHE (A)+BOU (H) — LIV (A) MCI (H)".
+
+    Venue is spelled out rather than coded by letter case, which readers
+    missed.
+    """
     if upcoming.empty:
         return pd.Series(dtype=str)
     first_event = int(upcoming["window_start"].iloc[0])
@@ -207,7 +211,7 @@ def next_fixtures_label(upcoming: pd.DataFrame, n_gws: int = 5) -> pd.Series:
             else:
                 parts.append(
                     "+".join(
-                        opp if home else opp.lower()
+                        f"{opp} ({'H' if home else 'A'})"
                         for opp, home in zip(rows["opponent_short"], rows["is_home"])
                     )
                 )
