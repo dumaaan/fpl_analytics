@@ -77,14 +77,15 @@ def _decide(position: str, filtered: pd.DataFrame) -> None:
     best = rated.nlargest(1, "points_per_match").iloc[0]
     cheap = rated[rated["price"] <= rated["price"].quantile(0.4)].nlargest(1, "points_per_match")
     run = _easiest_run(position)
-    parts = [f"**{best['web_name']}** has returned **{best['points_per_match']:.1f} points a match**, "
-             f"the most of any {POSITION_NAMES[position].lower().rstrip('s')} at £{best['price']:.1f}m."]
+    noun = POSITION_NAMES[position].lower().rstrip("s")
+    parts = [f"**{best['web_name']}** (£{best['price']:.1f}m) has returned "
+             f"**{best['points_per_match']:.1f} points a match**, more than any other {noun}."]
     if not cheap.empty and cheap.iloc[0]["web_name"] != best["web_name"]:
         c = cheap.iloc[0]
-        parts.append(f"The best of the cheaper options is **{c['web_name']}** at £{c['price']:.1f}m, "
-                     f"on {c['points_per_match']:.1f}.")
+        parts.append(f"The best cheaper option is **{c['web_name']}** at £{c['price']:.1f}m, "
+                     f"on {c['points_per_match']:.1f} a match.")
     if run:
-        parts.append(f"**{TEAM_NAMES.get(run, run)}** have the kindest next five weeks.")
+        parts.append(f"**{TEAM_NAMES.get(run, run)}** have the easiest next five fixtures.")
     st.markdown(" ".join(parts))
 
     st.altair_chart(points_per_match_strip(rated), width="stretch")
